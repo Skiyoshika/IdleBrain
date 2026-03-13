@@ -45,6 +45,44 @@ def _default_tag(path: Path, idx: int) -> str:
     return f"ch{idx:02d}"
 
 
+def _load_tuned_params(path: Path | None) -> tuple[dict, str | None, int | None]:
+    if path is None:
+        return {}, None, None
+    if not path.exists():
+        raise FileNotFoundError(f"tuned params json not found: {path}")
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
+
+    fit_mode = None
+    edge_smooth = None
+    warp_params: dict = {}
+
+    if isinstance(data, dict):
+        if isinstance(data.get("warpParams"), dict):
+            warp_params = dict(data["warpParams"])
+        if isinstance(data.get("fitMode"), str):
+            fit_mode = data["fitMode"]
+        if "edgeSmoothIter" in data:
+            try:
+                edge_smooth = int(data["edgeSmoothIter"])
+            except Exception:
+                edge_smooth = None
+        best = data.get("best")
+        if isinstance(best, dict):
+            params = best.get("params", {})
+            if isinstance(params, dict):
+                if isinstance(params.get("warpParams"), dict):
+                    warp_params = dict(params["warpParams"])
+                if isinstance(params.get("fitMode"), str):
+                    fit_mode = params["fitMode"]
+                if "edgeSmoothIter" in params:
+                    try:
+                        edge_smooth = int(params["edgeSmoothIter"])
+                    except Exception:
+                        edge_smooth = edge_smooth
+
+    return warp_params, fit_mode, edge_smooth
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Run atlas overlay test into outputs/Test_N")
     ap.add_argument(
@@ -68,6 +106,12 @@ def main() -> None:
     ap.add_argument("--slicing-plane", default="coronal")
     ap.add_argument("--major-top-k", type=int, default=28)
     ap.add_argument("--fit-mode", default="cover", choices=["contain", "cover", "width-lock", "height-lock"])
+    ap.add_argument("--edge-smooth-iter", type=int, default=1)
+    ap.add_argument(
+        "--tuned-params-json",
+        default="",
+        help="Optional json with tuned params. Supports outputs/trainset_tuned_params.json format.",
+    )
     args = ap.parse_args()
 
     annotation = Path(args.annotation)
@@ -76,6 +120,10 @@ def main() -> None:
 
     outputs_root = Path(args.outputs_root)
     out_dir = _next_test_dir(outputs_root)
+    tuned_json = Path(args.tuned_params_json) if str(args.tuned_params_json).strip() else None
+    warp_params, tuned_fit_mode, tuned_edge_smooth = _load_tuned_params(tuned_json)
+    fit_mode = str(tuned_fit_mode or args.fit_mode)
+    edge_smooth_iter = int(tuned_edge_smooth if tuned_edge_smooth is not None else args.edge_smooth_iter)
 
     summary: dict = {
         "output_dir": str(out_dir),
@@ -83,6 +131,10 @@ def main() -> None:
         "pixel_size_um": float(args.pixel_size_um),
         "z_step": int(args.z_step),
         "slicing_plane": str(args.slicing_plane),
+        "fit_mode": str(fit_mode),
+        "edge_smooth_iter": int(edge_smooth_iter),
+        "warp_params": warp_params,
+        "tuned_params_json": str(tuned_json) if tuned_json is not None else "",
         "channels": {},
     }
 
@@ -116,7 +168,9 @@ def main() -> None:
             mode="contour-major",
             pixel_size_um=float(args.pixel_size_um),
             major_top_k=int(args.major_top_k),
-            fit_mode=str(args.fit_mode),
+            fit_mode=fit_mode,
+            edge_smooth_iter=edge_smooth_iter,
+            warp_params=warp_params,
             return_meta=True,
             warped_label_out=warped_tif,
         )
@@ -128,7 +182,9 @@ def main() -> None:
             mode="fill",
             pixel_size_um=float(args.pixel_size_um),
             major_top_k=int(args.major_top_k),
-            fit_mode=str(args.fit_mode),
+            fit_mode=fit_mode,
+            edge_smooth_iter=edge_smooth_iter,
+            warp_params=warp_params,
             return_meta=True,
         )
 

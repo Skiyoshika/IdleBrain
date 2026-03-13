@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IdleBrain â?Brain Atlas Registration</title>
+  <title>IdleBrain 芒聙?Brain Atlas Registration</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -15,25 +15,25 @@
 <div id="lightbox" class="lightbox hidden">
   <div class="lightbox-bg" id="lightboxBg"></div>
   <img id="lightboxImg" alt="preview" />
-  <button class="lightbox-close" id="lightboxClose">â?/button>
+  <button class="lightbox-close" id="lightboxClose">芒聹?/button>
   <div class="lightbox-caption" id="lightboxCaption"></div>
 </div>
 
 <!-- ===== Getting Started Guide modal ===== -->
 <div id="guideModal" class="modal-overlay hidden">
   <div class="modal-box">
-    <button class="modal-close-btn" id="guideModalClose">â?/button>
-    <h2 data-i18n="guide.title">ð Getting Started Guide</h2>
+    <button class="modal-close-btn" id="guideModalClose">芒聹?/button>
+    <h2 data-i18n="guide.title">冒聼聯聳 Getting Started Guide</h2>
     <ol>
-      <li data-i18n="guide.step1"><strong>Step 1 â?Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
-      <li data-i18n="guide.step2"><strong>Step 2 â?Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 Âµm), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.</li>
-      <li data-i18n="guide.step3"><strong>Step 3 â?AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.</li>
-      <li data-i18n="guide.step4"><strong>Step 4 â?Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.</li>
+      <li data-i18n="guide.step1"><strong>Step 1 芒聙?Configure Paths:</strong> Click "Browse" to select your TIFF folder, Atlas annotation file, and brain region CSV. Fields marked "Required" must be filled in.</li>
+      <li data-i18n="guide.step2"><strong>Step 2 芒聙?Preview Atlas:</strong> Set the slicing plane (usually Coronal), pixel size (default 0.65 脗碌m), click "Auto-pick Atlas Slice", then "Refresh Preview" to check the initial overlay.</li>
+      <li data-i18n="guide.step3"><strong>Step 3 芒聙?AI Registration:</strong> Choose the mode (Affine for small deformation; Nonlinear for tears/large warping), then click "AI Landmark Registration". Check the quality panel to confirm SSIM improved.</li>
+      <li data-i18n="guide.step4"><strong>Step 4 芒聙?Run Pipeline:</strong> Select the fluorescence channel, then click "Run Pipeline". After completion, switch to the "Results" tab to view per-region cell counts.</li>
       <li data-i18n="guide.step5"><strong>Export:</strong> In the Results tab, click "Export CSV" for data. Click "Export Methods Text" to get a pre-written Methods paragraph you can paste directly into your paper.</li>
     </ol>
-    <p class="guide-tip" data-i18n="guide.tip">ð¡ Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.</p>
+    <p class="guide-tip" data-i18n="guide.tip">冒聼聮隆 Tip: All run parameters are automatically saved to outputs/run_params_YYYYMMDD_HHMMSS.json for reproducibility.</p>
     <div class="modal-footer">
-      <button class="btn-primary" id="guideModalOk" data-i18n="guide.ok">Got it â?Start Using</button>
+      <button class="btn-primary" id="guideModalOk" data-i18n="guide.ok">Got it 芒聙?Start Using</button>
     </div>
   </div>
 </div>
@@ -41,12 +41,12 @@
 <!-- ===== Methods paragraph modal ===== -->
 <div id="methodsModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:640px;">
-    <button class="modal-close-btn" id="methodsModalClose">â?/button>
-    <h2 data-i18n="methods.title">ð Methods Paragraph</h2>
+    <button class="modal-close-btn" id="methodsModalClose">芒聹?/button>
+    <h2 data-i18n="methods.title">冒聼聯聺 Methods Paragraph</h2>
     <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px;" data-i18n="methods.desc">The following text is auto-generated from your most recent run parameters. Edit as needed before pasting into your Methods section.</p>
     <pre id="methodsText" class="methods-pre" data-i18n="methods.loading">Loading...</pre>
     <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;">
-      <button class="btn-secondary" id="methodsCopyBtn" data-i18n="btn.copy">ð Copy to Clipboard</button>
+      <button class="btn-secondary" id="methodsCopyBtn" data-i18n="btn.copy">冒聼聯聥 Copy to Clipboard</button>
       <button class="btn-primary"   id="methodsModalClose2" data-i18n="btn.close">Close</button>
     </div>
   </div>
@@ -57,20 +57,20 @@
   <!-- ===== Sidebar ===== -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <span class="logo-icon">ð§ </span>
+      <span class="logo-icon">冒聼搂聽</span>
       <span class="logo-text">IdleBrain</span>
     </div>
     <nav class="sidebar-nav">
       <button class="nav-btn active" data-tab="workflow">
-        <span class="nav-icon">âï¸</span>
+        <span class="nav-icon">芒職聶茂赂聫</span>
         <span data-i18n="nav.workflow">Registration Workflow</span>
       </button>
       <button class="nav-btn" data-tab="qc">
-        <span class="nav-icon">ð</span>
+        <span class="nav-icon">冒聼聰聧</span>
         <span data-i18n="nav.qc">Batch QC Review</span>
       </button>
       <button class="nav-btn" data-tab="results">
-        <span class="nav-icon">ð</span>
+        <span class="nav-icon">冒聼聯聤</span>
         <span data-i18n="nav.results">Results</span>
       </button>
     </nav>
@@ -78,7 +78,7 @@
       <div class="lang-toggle">
         <button class="lang-btn active" data-lang="en">EN</button>
         <span class="lang-sep">/</span>
-        <button class="lang-btn" data-lang="zh">ä¸­æ</button>
+        <button class="lang-btn" data-lang="zh">盲赂颅忙聳聡</button>
       </div>
       <div class="sidebar-meta">
         <span class="version" id="versionText">v0.0.0</span>
@@ -96,7 +96,7 @@
       <header class="topbar">
         <h1 data-i18n="nav.workflow">Registration Workflow</h1>
         <div class="topbar-actions">
-          <button id="guideBtn" class="btn-ghost" data-i18n="btn.guide">ð Guide</button>
+          <button id="guideBtn" class="btn-ghost" data-i18n="btn.guide">冒聼聯聳 Guide</button>
         </div>
       </header>
 
@@ -110,7 +110,38 @@
           </div>
         </div>
 
-        <div class="grid-2">
+        <div class="workflow-mode-panel">
+          <div class="grid-3">
+            <label class="field-label">
+              <span>Workflow Mode / 流程模式</span>
+              <select id="workflowMode">
+                <option value="oneclick" selected>One-Click Mode (Recommended)</option>
+                <option value="pro">Professional Mode</option>
+              </select>
+            </label>
+            <label class="field-label">
+              <span>One-Click Source TIFF</span>
+              <div class="input-browse">
+                <input id="oneClickSourcePath" placeholder="D:\...\sample.tif" />
+                <button class="btn-browse" data-target="oneClickSourcePath" data-type="file" data-filetypes="tif,tiff" data-i18n="btn.browse">Browse</button>
+              </div>
+            </label>
+            <label class="field-label">
+              <span>Registration Scope / 配准范围</span>
+              <select id="oneClickScope">
+                <option value="single" selected>Single-layer Registration (single-slice)</option>
+                <option value="whole">Whole-brain Registration (full workflow)</option>
+              </select>
+              <span class="field-hint">Single-layer mode will include Z-layer selection for 3D TIFF.</span>
+            </label>
+          </div>
+          <div class="actions-row">
+            <button id="oneClickStartBtn" class="btn-primary">Start One-Click Workflow</button>
+            <span class="field-hint">Flow: auto-pick atlas → auto registration → manual review / liquify → export.</span>
+          </div>
+        </div>
+
+        <div class="grid-2 pro-only">
           <label class="field-label">
             <span><span data-i18n="label.inputDir">Input TIFF Folder</span> <em class="required" data-i18n="required">Required</em></span>
             <div class="input-browse">
@@ -147,7 +178,7 @@
             </div>
             <!-- 3D stack Z-slicer: auto-shown when 3D TIFF detected -->
             <div id="zSlicerBox" class="z-slicer-box hidden">
-              <span class="z-slicer-label" id="zSlicerLabel">3D stack detected â?Z: <strong id="zValDisplay">0</strong> / <span id="zMaxDisplay">0</span></span>
+              <span class="z-slicer-label" id="zSlicerLabel">3D stack detected 芒聙?Z: <strong id="zValDisplay">0</strong> / <span id="zMaxDisplay">0</span></span>
               <div class="z-slicer-row">
                 <input id="zSlider" type="range" min="0" max="645" value="300" step="1" />
                 <input id="zNumInput" type="number" min="0" max="645" value="300" style="width:64px;" />
@@ -165,9 +196,9 @@
           </label>
         </div>
 
-        <div class="actions-row">
-          <button id="savePreset" class="btn-secondary" data-i18n="btn.savePreset">ð¾ Save Config</button>
-          <button id="loadPreset" class="btn-secondary" data-i18n="btn.loadPreset">ð Load Config</button>
+        <div class="actions-row pro-only">
+          <button id="savePreset" class="btn-secondary" data-i18n="btn.savePreset">冒聼聮戮 Save Config</button>
+          <button id="loadPreset" class="btn-secondary" data-i18n="btn.loadPreset">冒聼聯聜 Load Config</button>
           <span id="validateStatus" class="validate-status"></span>
         </div>
       </section>
@@ -184,9 +215,9 @@
 
         <div class="grid-3">
           <label class="field-label">
-            <span data-i18n="label.pixelSizeUm">Pixel Size (Âµm/pixel)</span>
+            <span data-i18n="label.pixelSizeUm">Pixel Size (脗碌m/pixel)</span>
             <input id="pixelSizeUm" type="number" min="0.1" max="10.0" step="0.05" value="0.65" />
-            <span class="field-hint" data-i18n="hint.pixelSizeUm">Fluorescence microscopy: typically ~0.65 Âµm</span>
+            <span class="field-hint" data-i18n="hint.pixelSizeUm">Fluorescence microscopy: typically ~0.65 脗碌m</span>
           </label>
           <label class="field-label">
             <span data-i18n="label.slicingPlane">Slicing Plane</span>
@@ -197,9 +228,9 @@
             </select>
           </label>
           <label class="field-label">
-            <span data-i18n="label.rotateAtlas">Rotate Atlas (Â°)</span>
+            <span data-i18n="label.rotateAtlas">Rotate Atlas (脗掳)</span>
             <input id="rotateAtlas" type="number" min="-180" max="180" step="90" value="0" />
-            <span class="field-hint" data-i18n="hint.rotateAtlas">Try 180Â° if atlas appears upside down</span>
+            <span class="field-hint" data-i18n="hint.rotateAtlas">Try 180脗掳 if atlas appears upside down</span>
           </label>
           <label class="field-label">
             <span data-i18n="label.flipAtlas">Flip Atlas</span>
@@ -227,7 +258,7 @@
         </div>
 
         <details class="advanced-details">
-          <summary data-i18n="adv.options">Advanced Options â?/summary>
+          <summary data-i18n="adv.options">Advanced Options 芒聳?/summary>
           <div class="grid-3 advanced-grid">
             <label class="field-label">
               <span data-i18n="label.fitMode">Fit Mode</span>
@@ -250,8 +281,18 @@
         </details>
 
         <div class="actions-row">
-          <button id="autoPickBtn"       class="btn-secondary" data-i18n="btn.autoPick">ð¯ Auto-pick Atlas Slice</button>
-          <button id="refreshPreviewBtn" class="btn-primary"   data-i18n="btn.refreshPreview">ðï¸?Refresh Preview</button>
+          <button id="autoPickBtn"       class="btn-secondary" data-i18n="btn.autoPick">冒聼聨炉 Auto-pick Atlas Slice</button>
+          <button id="refreshPreviewBtn" class="btn-primary"   data-i18n="btn.refreshPreview">冒聼聭聛茂赂?Refresh Preview</button>
+          <label class="field-label" style="min-width:180px;">
+            <span>Export Format</span>
+            <select id="quickExportFormat">
+              <option value="png">PNG</option>
+              <option value="tif">TIFF</option>
+              <option value="jpg">JPG</option>
+              <option value="bmp">BMP</option>
+            </select>
+          </label>
+          <button id="quickExportBtn" class="btn-secondary">Export Current Preview</button>
         </div>
 
         <!-- Canvas editor (replaces static img) -->
@@ -260,10 +301,11 @@
           <div class="draw-toolbar hidden" id="drawToolbar">
             <div class="toolbar-group">
               <span class="toolbar-label" data-i18n="toolbar.tools">Tools:</span>
-              <button class="tool-btn active" data-tool="select" title="Select / Pan">â¬?/button>
-              <button class="tool-btn" data-tool="line"     title="Draw Line">â?/button>
-              <button class="tool-btn" data-tool="arrow"    title="Draw Arrow">â?/button>
-              <button class="tool-btn" data-tool="scalebar" title="Scale Bar" data-i18n="btn.scalebar">â?Scale</button>
+              <button class="tool-btn active" data-tool="select" title="Select / Pan">芒卢?/button>
+              <button class="tool-btn" data-tool="line"     title="Draw Line">芒聲?/button>
+              <button class="tool-btn" data-tool="arrow"    title="Draw Arrow">芒聠?/button>
+              <button class="tool-btn" data-tool="liquify"  title="Liquify Drag">Liquify</button>
+              <button class="tool-btn" data-tool="scalebar" title="Scale Bar" data-i18n="btn.scalebar">芒聼?Scale</button>
               <button class="tool-btn" data-tool="text"     title="Add Text">T</button>
             </div>
             <div class="toolbar-group">
@@ -275,11 +317,24 @@
                 <span data-i18n="toolbar.lineWidth">Width:</span>
                 <input type="number" id="drawLineWidth" value="2" min="1" max="20" style="width:48px;" />
               </label>
+              <label class="toolbar-label" style="display:flex;align-items:center;gap:6px;">
+                <span>Liquify R:</span>
+                <input type="number" id="liquifyRadius" value="80" min="8" max="260" style="width:58px;" />
+              </label>
+              <label class="toolbar-label" style="display:flex;align-items:center;gap:6px;">
+                <span>Power:</span>
+                <input type="number" id="liquifyStrength" value="0.72" min="0.05" max="1.5" step="0.05" style="width:62px;" />
+              </label>
             </div>
             <div class="toolbar-group">
-              <button id="undoAnnotationBtn"  class="btn-secondary" data-i18n="btn.undo">â?Undo</button>
-              <button id="clearAnnotationsBtn" class="btn-secondary" data-i18n="btn.clearAnnotations">ð Clear All</button>
-              <button id="exportCanvasBtn"     class="btn-primary"   data-i18n="btn.exportFigure">â¬?Export Figure</button>
+              <button id="undoAnnotationBtn"  class="btn-secondary" data-i18n="btn.undo">芒聠?Undo</button>
+              <button id="clearAnnotationsBtn" class="btn-secondary" data-i18n="btn.clearAnnotations">冒聼聴聭 Clear All</button>
+              <button id="exportCanvasBtn"     class="btn-primary"   data-i18n="btn.exportFigure">芒卢?Export Figure</button>
+              <button id="saveCalibLearnBtn"   class="btn-secondary">Save Calibration + Learn</button>
+              <label class="toolbar-label" style="display:flex;align-items:center;gap:6px;">
+                <input id="autoLearnToggle" type="checkbox" checked style="width:auto;" />
+                <span>Auto-learn (default)</span>
+              </label>
             </div>
           </div>
           <!-- Canvas placeholder -->
@@ -319,7 +374,7 @@
         </div>
 
         <details class="advanced-details">
-          <summary data-i18n="adv.params">Advanced Parameters â?/summary>
+          <summary data-i18n="adv.params">Advanced Parameters 芒聳?/summary>
           <div class="grid-3 advanced-grid">
             <label class="field-label">
               <span data-i18n="label.maxPoints">Max Landmark Points</span>
@@ -340,8 +395,8 @@
         </details>
 
         <div class="actions-row">
-          <button id="aiAlignBtn"      class="btn-primary"   data-i18n="btn.aiAlign">ð¤ AI Landmark Registration</button>
-          <button id="landmarkViewBtn" class="btn-secondary" data-i18n="btn.landmarkView">ðºï¸?View Landmark Map</button>
+          <button id="aiAlignBtn"      class="btn-primary"   data-i18n="btn.aiAlign">冒聼陇聳 AI Landmark Registration</button>
+          <button id="landmarkViewBtn" class="btn-secondary" data-i18n="btn.landmarkView">冒聼聴潞茂赂?View Landmark Map</button>
         </div>
 
         <!-- Alignment quality panel -->
@@ -350,12 +405,12 @@
           <div class="quality-row">
             <span class="quality-label" data-i18n="quality.before">Before</span>
             <div class="quality-bar-wrap"><div class="quality-bar" id="scoreBefore"></div></div>
-            <span class="quality-num" id="scoreBeforeNum">â?/span>
+            <span class="quality-num" id="scoreBeforeNum">芒聙?/span>
           </div>
           <div class="quality-row">
             <span class="quality-label" data-i18n="quality.after">After</span>
             <div class="quality-bar-wrap"><div class="quality-bar" id="scoreAfter"></div></div>
-            <span class="quality-num" id="scoreAfterNum">â?/span>
+            <span class="quality-num" id="scoreAfterNum">芒聙?/span>
           </div>
           <div class="quality-verdict" id="qualityVerdict"></div>
         </div>
@@ -371,25 +426,25 @@
         <!-- Manual Landmark Correction Panel -->
         <div class="manual-panel" id="manualPanel">
           <div class="manual-panel-header">
-            <h3 data-i18n="manual.title">âï¸ Manual Landmark Correction</h3>
+            <h3 data-i18n="manual.title">芒聹聫茂赂聫 Manual Landmark Correction</h3>
             <p class="step-desc" data-i18n="manual.desc">Click a point on the <strong>Real Slice</strong>, then click the corresponding point on the <strong>Atlas Slice</strong> to add a manual landmark pair.</p>
             <div class="actions-row" style="margin-top:10px;">
-              <button id="manualModeBtn" class="btn-secondary" data-i18n="btn.startManual">ð Enter Manual Mode</button>
-              <button id="applyManualBtn" class="btn-primary hidden" data-i18n="btn.applyManual">â?Apply Manual Landmarks &amp; Realign</button>
-              <button id="clearManualBtn" class="btn-danger  hidden" data-i18n="btn.clearManual">ð Clear Manual Points</button>
+              <button id="manualModeBtn" class="btn-secondary" data-i18n="btn.startManual">冒聼聯聧 Enter Manual Mode</button>
+              <button id="applyManualBtn" class="btn-primary hidden" data-i18n="btn.applyManual">芒聹?Apply Manual Landmarks &amp; Realign</button>
+              <button id="clearManualBtn" class="btn-danger  hidden" data-i18n="btn.clearManual">冒聼聴聭 Clear Manual Points</button>
             </div>
           </div>
           <!-- Side-by-side canvases (shown in manual mode) -->
           <div class="manual-canvases hidden" id="manualCanvases">
             <div class="manual-side">
-              <div class="manual-side-title" data-i18n="manual.realSide">Real Slice â?click to mark point</div>
+              <div class="manual-side-title" data-i18n="manual.realSide">Real Slice 芒聙?click to mark point</div>
               <div class="manual-canvas-wrap">
                 <img id="manualRealImg" class="manual-base-img" alt="real slice" />
                 <canvas id="manualRealCanvas" class="manual-canvas"></canvas>
               </div>
             </div>
             <div class="manual-side">
-              <div class="manual-side-title" data-i18n="manual.atlasSide">Atlas Slice â?click corresponding point</div>
+              <div class="manual-side-title" data-i18n="manual.atlasSide">Atlas Slice 芒聙?click corresponding point</div>
               <div class="manual-canvas-wrap">
                 <img id="manualAtlasImg" class="manual-base-img" alt="atlas slice" />
                 <canvas id="manualAtlasCanvas" class="manual-canvas"></canvas>
@@ -426,10 +481,10 @@
         <div class="channel-section">
           <label class="field-label"><span data-i18n="label.channels">Fluorescence Channel</span></label>
           <div class="channel-pills" id="channelPills">
-            <button data-channel="red"    class="pill active" data-i18n="ch.red">ð´ Red</button>
-            <button data-channel="green"  class="pill"        data-i18n="ch.green">ð¢ Green</button>
-            <button data-channel="farred" class="pill"        data-i18n="ch.farred">ð£ Far-Red</button>
-            <button id="batchAll"         class="pill"        data-i18n="ch.all">â?All Channels</button>
+            <button data-channel="red"    class="pill active" data-i18n="ch.red">冒聼聰麓 Red</button>
+            <button data-channel="green"  class="pill"        data-i18n="ch.green">冒聼聼垄 Green</button>
+            <button data-channel="farred" class="pill"        data-i18n="ch.farred">冒聼聼拢 Far-Red</button>
+            <button id="batchAll"         class="pill"        data-i18n="ch.all">芒聳?All Channels</button>
           </div>
         </div>
 
@@ -443,13 +498,13 @@
         </div>
 
         <div class="actions-row">
-          <button id="runBtn"        class="btn-run"    data-i18n="btn.run">â?Run Pipeline</button>
-          <button id="cancelBtn"     class="btn-danger" data-i18n="btn.cancel">â?Cancel</button>
-          <button id="openOutputsBtn" class="btn-ghost" data-i18n="btn.openOutputs">ð Open Output Folder</button>
+          <button id="runBtn"        class="btn-run"    data-i18n="btn.run">芒聳?Run Pipeline</button>
+          <button id="cancelBtn"     class="btn-danger" data-i18n="btn.cancel">芒聫?Cancel</button>
+          <button id="openOutputsBtn" class="btn-ghost" data-i18n="btn.openOutputs">冒聼聯聛 Open Output Folder</button>
         </div>
 
         <details class="log-details" open style="margin-top:14px;">
-          <summary data-i18n="log.title">Live Logs â?/summary>
+          <summary data-i18n="log.title">Live Logs 芒聳?/summary>
           <pre id="logBox" class="log-box" data-i18n="log.ready">[ready] Frontend initialized</pre>
         </details>
       </section>
@@ -464,7 +519,7 @@
         <h1 data-i18n="tab.qc.title">Batch QC Review</h1>
         <div class="topbar-actions">
           <span id="qcAllCount" class="qc-count-badge"></span>
-          <button id="refreshQcAllBtn" class="btn-secondary" data-i18n="btn.refreshQc">ð Refresh</button>
+          <button id="refreshQcAllBtn" class="btn-secondary" data-i18n="btn.refreshQc">冒聼聰聞 Refresh</button>
         </div>
       </header>
       <section class="panel">
@@ -482,16 +537,16 @@
       <header class="topbar">
         <h1 data-i18n="tab.results.title">Results</h1>
         <div class="topbar-actions">
-          <button id="refreshBtn"       class="btn-secondary" data-i18n="btn.refreshResults">ð Refresh</button>
-          <button id="exportBtn"        class="btn-secondary" data-i18n="btn.exportCsv">â¬ï¸ Export CSV</button>
-          <button id="exportMethodsBtn" class="btn-secondary" data-i18n="btn.exportMethods">ð Export Methods Text</button>
+          <button id="refreshBtn"       class="btn-secondary" data-i18n="btn.refreshResults">冒聼聰聞 Refresh</button>
+          <button id="exportBtn"        class="btn-secondary" data-i18n="btn.exportCsv">芒卢聡茂赂聫 Export CSV</button>
+          <button id="exportMethodsBtn" class="btn-secondary" data-i18n="btn.exportMethods">冒聼聯聺 Export Methods Text</button>
         </div>
       </header>
 
       <section class="panel">
         <div class="results-toolbar">
           <h2 data-i18n="results.title">Cell Counts by Brain Region</h2>
-          <input id="regionSearch" class="search-input" data-i18n-ph="ph.regionSearch" placeholder="ð Search region name..." />
+          <input id="regionSearch" class="search-input" data-i18n-ph="ph.regionSearch" placeholder="冒聼聰聧 Search region name..." />
         </div>
         <table id="resultsTable">
           <thead>
@@ -527,9 +582,9 @@
       <section class="panel">
         <div class="results-toolbar">
           <h2 data-i18n="outputs.title">Output Files</h2>
-          <button id="refreshFileListBtn" class="btn-secondary" data-i18n="btn.refreshResults">ð Refresh</button>
+          <button id="refreshFileListBtn" class="btn-secondary" data-i18n="btn.refreshResults">冒聼聰聞 Refresh</button>
         </div>
-        <p class="hint-text" data-i18n="outputs.hint">Click a PNG to preview Â· Click CSV/JSON to view content</p>
+        <p class="hint-text" data-i18n="outputs.hint">Click a PNG to preview 脗路 Click CSV/JSON to view content</p>
         <div id="outputFileGrid" class="output-file-grid"></div>
         <div id="outputFileEmpty" class="empty-hint" data-i18n="outputs.empty">No output files yet</div>
       </section>
@@ -541,3 +596,5 @@
 <script src="./app.js"></script>
 </body>
 </html>
+
+

@@ -30,7 +30,21 @@
   "detection": {
     "primary_model": "cellpose_cyto2",
     "secondary_model": "cellpose_nuclei",
-    "fallback_model": "log_watershed",
+    "merge_primary_secondary": false,
+    "cellpose_gpu": true,
+    "cellpose_diameter_um": 12.0,
+    "cellpose_channels": [0, 0],
+    "cellpose_flow_threshold": 0.4,
+    "cellpose_cellprob_threshold": 0.0,
+    "cellpose_min_size_px": 8,
+    "within_slice_dedup_px": 4.0,
+    "fallback_model": "log",
+    "fallback_log_min_sigma": 1.2,
+    "fallback_log_max_sigma": 5.0,
+    "fallback_log_num_sigma": 8,
+    "fallback_log_threshold_rel": 0.03,
+    "fallback_min_distance": 8,
+    "fallback_threshold": 200.0,
     "auto_switch_on_distortion": true
   },
   "dedup": {

@@ -22,3 +22,4 @@ project/frontend/dist/
 .DS_Store
 Thumbs.db
 .vscode/
+.claude/

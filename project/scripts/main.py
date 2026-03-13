@@ -17,7 +17,7 @@ from qc import export_slice_qc, export_overlays
 
 
 def load_config(path: Path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 

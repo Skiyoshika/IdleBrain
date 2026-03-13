@@ -237,6 +237,18 @@ button { cursor: pointer; border: none; font-size: 13px; border-radius: var(--ra
 .validate-status { font-size: 12px; color: var(--ok-light); margin-left: 4px; }
 .validate-status.err { color: var(--danger); }
 
+.workflow-mode-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(76, 114, 245, 0.07);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+body.mode-oneclick .pro-only {
+  display: none !important;
+}
+
 /* ===== CHANNEL PILLS ===== */
 .channel-section { margin-bottom: 16px; }
 .channel-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }

@@ -1,6 +1,6 @@
-/* ============================================================
-   IdleBrain UI â?app.js
-   Bilingual (EN default / ä¸­æ toggle)
+﻿/* ============================================================
+   IdleBrain UI 芒聙?app.js
+   Bilingual (EN default / 盲赂颅忙聳聡 toggle)
    ============================================================ */
 
 // ================================================================
@@ -20,6 +20,12 @@ const historyList   = document.getElementById('historyList');
 const versionText   = document.getElementById('versionText');
 const sliceProgress = document.getElementById('sliceProgress');
 const validateStatus = document.getElementById('validateStatus');
+const workflowModeEl = document.getElementById('workflowMode');
+const oneClickSourcePathEl = document.getElementById('oneClickSourcePath');
+const oneClickScopeEl = document.getElementById('oneClickScope');
+const oneClickStartBtn = document.getElementById('oneClickStartBtn');
+const quickExportBtn = document.getElementById('quickExportBtn');
+const quickExportFormatEl = document.getElementById('quickExportFormat');
 
 // ================================================================
 // TOAST
@@ -102,6 +108,15 @@ async function browseFor(targetId, type, filetypes = '') {
 document.querySelectorAll('.btn-browse').forEach(btn => {
   btn.onclick = () => browseFor(btn.dataset.target, btn.dataset.type, btn.dataset.filetypes || '');
 });
+
+function applyWorkflowMode(mode) {
+  const m = (mode || 'oneclick').toLowerCase();
+  document.body.classList.toggle('mode-oneclick', m === 'oneclick');
+}
+
+if (workflowModeEl) {
+  workflowModeEl.onchange = () => applyWorkflowMode(workflowModeEl.value);
+}
 
 // ================================================================
 // PROGRESS / STATUS
@@ -228,7 +243,7 @@ async function refreshOverlayPreview() {
     rotateAtlas:      Number(document.getElementById('rotateAtlas').value || 0),
     flipAtlas:        document.getElementById('flipAtlas').value || 'none',
     majorTopK:        Number(document.getElementById('majorTopK').value || 20),
-    fitMode, alpha, mode,
+    fitMode, alpha, mode, edgeSmoothIter: mode === 'fill' ? 2 : 1,
   };
   let res = await fetch('/api/overlay/preview', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -325,7 +340,7 @@ function showAlignQuality(beforeEdge, afterEdge, improved) {
     <span class="verdict-improve ${impCls}">${impSign}${impPct}%</span>
   `;
   const toastType = improved ? (level === 'poor' || level === 'fair' ? 'warning' : 'success') : 'error';
-  showToast(`SSIM ${b.toFixed(4)} â?${a.toFixed(4)} (${impSign}${impPct}%) â?${t(`quality.${level}`)}`, toastType, 6000);
+  showToast(`SSIM ${b.toFixed(4)} 芒聠?${a.toFixed(4)} (${impSign}${impPct}%) 芒聙?${t(`quality.${level}`)}`, toastType, 6000);
 }
 
 // ================================================================
@@ -363,7 +378,7 @@ document.getElementById('aiAlignBtn').onclick = async () => {
     compareImg.classList.remove('hidden');
     document.getElementById('alignPreviewPlaceholder').classList.add('hidden');
     compareImg.onclick = () => openLightbox(compareImg.src, t('lightbox.compare'));
-    log(`AI ${alignMode} | pairs=${lm.landmark_pairs} | SSIM ${Number(ap.beforeEdgeScore).toFixed(4)} â?${Number(ap.afterEdgeScore).toFixed(4)}`);
+    log(`AI ${alignMode} | pairs=${lm.landmark_pairs} | SSIM ${Number(ap.beforeEdgeScore).toFixed(4)} 芒聠?${Number(ap.afterEdgeScore).toFixed(4)}`);
   } catch { showToast(t('toast.alignUnexpected'), 'error'); }
 };
 
@@ -440,7 +455,7 @@ async function pollLogsUntilDone() {
     logBox.scrollTop = logBox.scrollHeight;
     if (s.running) {
       const lastLines = logsData.logs.slice(-10).join('\n');
-      const m = lastLines.match(/slices?\s+(\d+)\s*[\/ï¼]\s*(\d+)/i);
+      const m = lastLines.match(/slices?\s+(\d+)\s*[\/茂录聫]\s*(\d+)/i);
       if (m) {
         const cur = Number(m[1]), total = Number(m[2]);
         sliceProgress.classList.remove('hidden');
@@ -600,11 +615,18 @@ async function refreshHistory() {
 async function init() {
   // Apply saved or default language
   applyLang(currentLang);
+  applyWorkflowMode(workflowModeEl?.value || 'oneclick');
 
   try {
     const info = await fetch('/api/info').then(r => r.json());
     versionText.textContent = `v${info.version || '0.0.0'}`;
     if (!document.getElementById('outputDir').value) document.getElementById('outputDir').value = info.outputs || '';
+    if (!document.getElementById('atlasPath').value && info?.defaults?.atlasPath) {
+      document.getElementById('atlasPath').value = info.defaults.atlasPath;
+    }
+    if (!document.getElementById('structPath').value && info?.defaults?.structPath) {
+      document.getElementById('structPath').value = info.defaults.structPath;
+    }
   } catch {}
 
   // Auto-load last preset silently
@@ -672,7 +694,7 @@ zExtractBtn.onclick = async () => {
     }).then(r => r.json());
     if (!res.ok) { showToast(t('toast.zExtractFail', { err: res.error }), 'error'); return; }
     document.getElementById('realSlicePath').value = res.path;
-    zExtractStatus.textContent = `â?${res.path}`;
+    zExtractStatus.textContent = `芒聠?${res.path}`;
     showToast(t('toast.zExtracted', { z, path: res.path }), 'success', 4000);
   } catch { showToast(t('toast.zExtractFail', { err: '?' }), 'error'); }
 };
@@ -686,6 +708,10 @@ const drawToolbar   = document.getElementById('drawToolbar');
 const canvasWrap    = document.getElementById('canvasWrap');
 const previewImgEl  = document.getElementById('previewImg');
 const regionHoverTooltip = document.getElementById('regionHoverTooltip');
+const liquifyRadiusEl = document.getElementById('liquifyRadius');
+const liquifyStrengthEl = document.getElementById('liquifyStrength');
+const saveCalibLearnBtn = document.getElementById('saveCalibLearnBtn');
+const autoLearnToggle = document.getElementById('autoLearnToggle');
 
 let hoverTimer = null;
 let hoverReqSeq = 0;
@@ -699,6 +725,8 @@ let drawStartX      = 0;
 let drawStartY      = 0;
 let annotations     = [];   // stored vector annotations
 let pendingTextPos  = null;
+let liquifyBusy     = false;
+let calibLearnPollTimer = null;
 
 // Tool selection
 document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
@@ -713,6 +741,36 @@ document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
 
 function getDrawColor()     { return document.getElementById('drawColor').value; }
 function getDrawLineWidth() { return Number(document.getElementById('drawLineWidth').value) || 2; }
+function getLiquifyRadius() {
+  const v = Number(liquifyRadiusEl?.value ?? 80);
+  return Math.max(8, Math.min(260, Number.isFinite(v) ? v : 80));
+}
+function getLiquifyStrength() {
+  const v = Number(liquifyStrengthEl?.value ?? 0.72);
+  return Math.max(0.05, Math.min(1.5, Number.isFinite(v) ? v : 0.72));
+}
+
+function buildOverlayRequestPayload(modeOverride = null) {
+  const modeEl = document.getElementById('overlayMode');
+  const mode = modeOverride || modeEl?.value || 'fill';
+  const alpha = Number(alphaRange.value) / 100;
+  return {
+    realPath: document.getElementById('realSlicePath').value,
+    realZIndex: getSelectedRealZIndex(),
+    labelPath: document.getElementById('atlasLabelPath').value || '../outputs/test_label.tif',
+    structureCsv: document.getElementById('structPath').value || '',
+    minMeanThreshold: Number(document.getElementById('minMeanThreshold').value || 8),
+    pixelSizeUm: Number(document.getElementById('pixelSizeUm').value || 0.65),
+    rotateAtlas: Number(document.getElementById('rotateAtlas').value || 0),
+    flipAtlas: document.getElementById('flipAtlas').value || 'none',
+    majorTopK: Number(document.getElementById('majorTopK').value || 20),
+    fitMode: document.getElementById('fitMode')?.value || 'cover',
+    edgeSmoothIter: mode === 'fill' ? 2 : 1,
+    warpParams: {},
+    alpha,
+    mode,
+  };
+}
 
 function escapeHtml(txt) {
   return String(txt ?? '')
@@ -890,7 +948,7 @@ function drawAnnotation(ann) {
     ctx.stroke();
     ctx.font = `bold ${Math.max(12, ann.lw * 5)}px sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(`${ann.umLen} Âµm`, ann.x + px / 2, ann.y - 8);
+    ctx.fillText(`${ann.umLen} 脗碌m`, ann.x + px / 2, ann.y - 8);
 
   } else if (ann.type === 'text') {
     ctx.font = `${ann.size || 16}px sans-serif`;
@@ -921,8 +979,81 @@ function drawPreviewStroke(x2, y2) {
     ctx.lineTo(x2 - sz * Math.cos(ang - 0.4), y2 - sz * Math.sin(ang - 0.4));
     ctx.lineTo(x2 - sz * Math.cos(ang + 0.4), y2 - sz * Math.sin(ang + 0.4));
     ctx.closePath(); ctx.fill();
+  } else if (currentTool === 'liquify') {
+    const r = getLiquifyRadius();
+    ctx.lineWidth = Math.max(1, getDrawLineWidth());
+    ctx.beginPath(); ctx.moveTo(drawStartX, drawStartY); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(drawStartX, drawStartY, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x2, y2, Math.max(5, r * 0.35), 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
   }
   ctx.restore();
+}
+
+async function applyLiquifyDrag(x1, y1, x2, y2) {
+  if (liquifyBusy) return;
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  if (dist < 2.0) return;
+
+  const payload = buildOverlayRequestPayload();
+  if (!payload.realPath) {
+    showToast('Please set Real Slice path first.', 'warning');
+    return;
+  }
+  payload.x1 = Number(x1);
+  payload.y1 = Number(y1);
+  payload.x2 = Number(x2);
+  payload.y2 = Number(y2);
+  payload.radius = getLiquifyRadius();
+  payload.strength = getLiquifyStrength();
+
+  liquifyBusy = true;
+  try {
+    const res = await fetch('/api/overlay/liquify-drag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+    if (!res.ok) {
+      showToast(`Liquify failed: ${res.error || '?'}`, 'error');
+      return;
+    }
+    if (res.correctedLabelPath) {
+      document.getElementById('atlasLabelPath').value = res.correctedLabelPath;
+    }
+    await loadPreviewIntoCanvas();
+    hoverLastPixelKey = '';
+    hideRegionTooltip();
+    showToast(`Liquify applied (${dist.toFixed(1)} px).`, 'success', 1600);
+  } catch (e) {
+    showToast(`Liquify failed: ${e?.message || '?'}`, 'error');
+  } finally {
+    liquifyBusy = false;
+  }
+}
+
+async function pollCalibrationLearnStatus() {
+  try {
+    const st = await fetch('/api/calibration/learn-status').then(r => r.json());
+    if (!st.ok || !st.state) return;
+    const s = st.state;
+    if (s.running) return;
+    if (calibLearnPollTimer) {
+      clearInterval(calibLearnPollTimer);
+      calibLearnPollTimer = null;
+    }
+    if (s.ok === true) {
+      showToast('Auto-learning finished. Tuned params updated.', 'success', 5000);
+    } else {
+      showToast(`Auto-learning failed: ${s.error || '?'}`, 'warning', 7000);
+    }
+  } catch {
+    if (calibLearnPollTimer) {
+      clearInterval(calibLearnPollTimer);
+      calibLearnPollTimer = null;
+    }
+  }
 }
 
 function canvasCoords(e) {
@@ -997,6 +1128,11 @@ drawCanvas.addEventListener('mouseup', e => {
   const { x, y } = canvasCoords(e);
   const dx = x - drawStartX, dy = y - drawStartY;
   if (Math.sqrt(dx*dx + dy*dy) < 3) return; // ignore tiny clicks
+  if (currentTool === 'liquify') {
+    applyLiquifyDrag(drawStartX, drawStartY, x, y);
+    redrawAnnotations();
+    return;
+  }
   annotations.push({ type: currentTool, x1: drawStartX, y1: drawStartY, x2: x, y2: y, color: getDrawColor(), lw: getDrawLineWidth() });
   redrawAnnotations();
 });
@@ -1029,6 +1165,44 @@ document.getElementById('exportCanvasBtn').onclick = () => {
   }, 'image/png');
 };
 
+if (saveCalibLearnBtn) {
+  saveCalibLearnBtn.onclick = async () => {
+    const payload = buildOverlayRequestPayload();
+    if (!payload.realPath) {
+      showToast('Please set Real Slice path first.', 'warning');
+      return;
+    }
+    payload.autoLearn = autoLearnToggle ? !!autoLearnToggle.checked : true;
+    payload.note = 'manual_liquify_or_landmark_adjust';
+    try {
+      const res = await fetch('/api/overlay/calibration/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(r => r.json());
+      if (!res.ok) {
+        showToast(`Finalize failed: ${res.error || '?'}`, 'error');
+        return;
+      }
+      const sid = res?.sample?.sample_id;
+      showToast(`Calibration saved as sample #${sid}.`, 'success', 3500);
+      const pruned = Number(res?.sample?.prune?.pruned || 0);
+      const kept = Number(res?.sample?.prune?.kept || 0);
+      const maxN = Number(res?.sample?.sample_limit || 0);
+      if (pruned > 0) {
+        showToast(`Sample library pruned: removed ${pruned}, kept ${kept}/${maxN}.`, 'info', 5000);
+      }
+      if (res.learningStarted) {
+        showToast('Auto-learning started in background.', 'info', 3000);
+        if (calibLearnPollTimer) clearInterval(calibLearnPollTimer);
+        calibLearnPollTimer = setInterval(pollCalibrationLearnStatus, 5000);
+      }
+    } catch (e) {
+      showToast(`Finalize failed: ${e?.message || '?'}`, 'error');
+    }
+  };
+}
+
 // Override refreshOverlayPreview to load result into canvas
 const _origRefreshOverlayPreview = refreshOverlayPreview;
 // Patch: after server returns OK, also load into canvas
@@ -1050,7 +1224,7 @@ async function refreshOverlayPreviewWithCanvas() {
     rotateAtlas:      Number(document.getElementById('rotateAtlas').value || 0),
     flipAtlas:        document.getElementById('flipAtlas').value || 'none',
     majorTopK:        Number(document.getElementById('majorTopK').value || 20),
-    fitMode, alpha, mode,
+    fitMode, alpha, mode, edgeSmoothIter: mode === 'fill' ? 2 : 1,
   };
   let res = await fetch('/api/overlay/preview', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -1088,6 +1262,95 @@ document.getElementById('refreshPreviewBtn').onclick = refreshOverlayPreviewWith
 // Also re-hook alpha/mode change
 alphaRange.oninput = () => { alphaValue.textContent = `${alphaRange.value}%`; refreshOverlayPreviewWithCanvas(); };
 document.getElementById('overlayMode').onchange = refreshOverlayPreviewWithCanvas;
+
+async function runOneClickWorkflow() {
+  const source = String(oneClickSourcePathEl?.value || '').trim();
+  const scope = String(oneClickScopeEl?.value || 'single');
+  if (!source) {
+    showToast('Please choose source TIFF first.', 'warning');
+    return;
+  }
+
+  document.getElementById('realSlicePath').value = source;
+  document.getElementById('realSlicePath').dispatchEvent(new Event('change'));
+  try { await checkSliceIs3D(source); } catch {}
+
+  // Single-layer flow: force user to pass through Z selection step for 3D stacks.
+  const zVisible = !!(zSlicerBox && !zSlicerBox.classList.contains('hidden'));
+  if (scope === 'single' && zVisible && oneClickStartBtn?.dataset?.zConfirmed !== '1') {
+    if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '1';
+    showToast('3D detected: please pick Z layer, then click Start again.', 'info', 5000);
+    return;
+  }
+  if (oneClickStartBtn) oneClickStartBtn.dataset.zConfirmed = '0';
+
+  try {
+    const info = await fetch('/api/info').then(r => r.json());
+    const defs = info?.defaults || {};
+    if (!document.getElementById('atlasPath').value && defs.atlasPath) {
+      document.getElementById('atlasPath').value = defs.atlasPath;
+    }
+    if (!document.getElementById('structPath').value && defs.structPath) {
+      document.getElementById('structPath').value = defs.structPath;
+    }
+    if (!document.getElementById('outputDir').value && info.outputs) {
+      document.getElementById('outputDir').value = info.outputs;
+    }
+    if (!document.getElementById('inputDir').value) {
+      const p = source.replaceAll('\\', '/');
+      document.getElementById('inputDir').value = p.includes('/') ? p.substring(0, p.lastIndexOf('/')) : p;
+    }
+  } catch {}
+
+  // Whole-brain uses stronger default align mode.
+  if (scope === 'whole') {
+    const alignEl = document.getElementById('alignMode');
+    if (alignEl) alignEl.value = 'nonlinear';
+  }
+
+  const okAuto = await ensureAutoPickedAtlasSlice(source);
+  if (!okAuto) {
+    showToast('Auto-pick failed, please check atlas path.', 'error');
+    return;
+  }
+  await refreshOverlayPreviewWithCanvas();
+
+  // Execute AI registration once.
+  const aiAlignHandler = document.getElementById('aiAlignBtn')?.onclick;
+  if (typeof aiAlignHandler === 'function') {
+    await aiAlignHandler();
+  }
+
+  // Enter manual review stage.
+  if (manualModeBtn && !manualState.active) {
+    manualModeBtn.click();
+  }
+  showToast('One-click registration done. Entered manual review stage.', 'success', 5000);
+}
+
+if (oneClickStartBtn) {
+  oneClickStartBtn.onclick = runOneClickWorkflow;
+}
+
+if (quickExportBtn) {
+  quickExportBtn.onclick = async () => {
+    const fmt = String(quickExportFormatEl?.value || 'png');
+    try {
+      const res = await fetch('/api/overlay/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format: fmt }),
+      }).then(r => r.json());
+      if (!res.ok) {
+        showToast(`Export failed: ${res.error || '?'}`, 'error');
+        return;
+      }
+      showToast(`Exported: ${res.path}`, 'success', 5000);
+    } catch (e) {
+      showToast(`Export failed: ${e?.message || '?'}`, 'error');
+    }
+  };
+}
 
 // ================================================================
 // MANUAL LANDMARK CORRECTION
@@ -1154,7 +1417,7 @@ function updateManualPairsTable() {
   manualPairsBody.innerHTML = '';
   manualState.pairs.forEach((p, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">â?/button></td>`;
+    tr.innerHTML = `<td>${i+1}</td><td>(${Math.round(p.real_x)}, ${Math.round(p.real_y)})</td><td>(${Math.round(p.atlas_x)}, ${Math.round(p.atlas_y)})</td><td><button onclick="removeManualPair(${i})" style="background:transparent;color:var(--danger);border:none;cursor:pointer;">芒聹?/button></td>`;
     manualPairsBody.appendChild(tr);
   });
   manualPairsWrap.classList.toggle('hidden', manualState.pairs.length === 0);
@@ -1242,11 +1505,11 @@ async function refreshFileList() {
     if (!res.ok || res.files.length === 0) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
     grid.innerHTML = '';
-    const ICONS = { '.png': 'ð¼', '.tif': 'ð¬', '.tiff': 'ð¬', '.csv': 'ð', '.json': 'ð', '.txt': 'ð' };
+    const ICONS = { '.png': '冒聼聳录', '.tif': '冒聼聰卢', '.tiff': '冒聼聰卢', '.csv': '冒聼聯聤', '.json': '冒聼聯聥', '.txt': '冒聼聯聞' };
     res.files.forEach(f => {
       const card = document.createElement('div');
       card.className = 'output-file-card';
-      const icon = ICONS[f.ext] || 'ð';
+      const icon = ICONS[f.ext] || '冒聼聯聛';
       const sizeStr = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} MB` : `${(f.size/1024).toFixed(0)} KB`;
       card.innerHTML = `<span class="file-icon">${icon}</span><span class="file-name" title="${f.name}">${f.name}</span><span class="file-size">${sizeStr}</span>`;
       card.onclick = () => handleOutputFileClick(f);
@@ -1275,3 +1538,4 @@ async function refreshOutputsAndFiles() {
   await refreshFileList();
 }
 document.getElementById('refreshBtn').onclick = refreshOutputsAndFiles;
+

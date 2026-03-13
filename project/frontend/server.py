@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import json
 import datetime
+import time
 from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, request, send_from_directory
@@ -32,8 +33,11 @@ from scripts.atlas_autopick import autopick_best_z
 from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
 from tifffile import imread, imwrite
 import numpy as np
+from scipy.ndimage import map_coordinates, gaussian_filter
+from PIL import Image
 
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
+MAX_CALIB_SAMPLES = int(os.environ.get("IDLEBRAIN_MAX_CALIB_SAMPLES", "180"))
 
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 
@@ -48,6 +52,16 @@ run_state = {
     "history": [],
 }
 
+learning_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "ok": None,
+    "error": "",
+    "out_json": "",
+    "log_tail": [],
+}
+
 _HOVER_LABEL_PATH = OUTPUT_DIR / "overlay_label_preview.tif"
 _hover_label_cache: dict = {"path": "", "mtime": 0.0, "img": None}
 _hover_tree_cache: dict | None = None
@@ -59,6 +73,267 @@ def _append_log(line: str):
     run_state["logs"].append(line.rstrip())
     if len(run_state["logs"]) > 500:
         run_state["logs"] = run_state["logs"][-500:]
+
+
+def _norm_u8_robust(img: np.ndarray) -> np.ndarray:
+    x = img.astype(np.float32)
+    p1, p99 = np.percentile(x, 1), np.percentile(x, 99)
+    if p99 <= p1:
+        p1, p99 = float(np.min(x)), float(np.max(x) + 1e-6)
+    x = np.clip((x - p1) / (p99 - p1 + 1e-6), 0, 1)
+    return (x * 255.0).astype(np.uint8)
+
+
+def _next_train_pair_id(train_dir: Path) -> int:
+    n = 1
+    seen = set()
+    for p in train_dir.glob("*_Ori.png"):
+        try:
+            seen.add(int(p.stem.replace("_Ori", "")))
+        except Exception:
+            continue
+    while n in seen:
+        n += 1
+    return n
+
+
+def _trainset_pair_ids(train_dir: Path) -> list[int]:
+    ori_ids = set()
+    show_ids = set()
+    for p in train_dir.glob("*_Ori.png"):
+        try:
+            ori_ids.add(int(p.stem.replace("_Ori", "")))
+        except Exception:
+            continue
+    for p in train_dir.glob("*_Show.png"):
+        try:
+            show_ids.add(int(p.stem.replace("_Show", "")))
+        except Exception:
+            continue
+    return sorted(ori_ids & show_ids)
+
+
+def _prune_trainset_if_needed(train_dir: Path, max_samples: int) -> dict:
+    max_n = max(10, int(max_samples))
+    ids = _trainset_pair_ids(train_dir)
+    if len(ids) <= max_n:
+        return {"pruned": 0, "kept": len(ids), "max": max_n}
+
+    remove_ids = ids[: len(ids) - max_n]
+    removed = 0
+    calib_dir = OUTPUT_DIR / "manual_calibration"
+    for sid in remove_ids:
+        for suffix in ("_Ori.png", "_Show.png"):
+            p = train_dir / f"{sid}{suffix}"
+            if p.exists():
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+        m = calib_dir / f"calibration_sample_{sid}.json"
+        if m.exists():
+            try:
+                m.unlink()
+            except Exception:
+                pass
+        removed += 1
+
+    ids_after = _trainset_pair_ids(train_dir)
+    return {"pruned": int(removed), "kept": len(ids_after), "max": max_n}
+
+
+def _warp_label_with_flow(label: np.ndarray, flow_v: np.ndarray, flow_u: np.ndarray) -> np.ndarray:
+    h, w = label.shape[:2]
+    rr, cc = np.meshgrid(
+        np.arange(h, dtype=np.float32),
+        np.arange(w, dtype=np.float32),
+        indexing="ij",
+    )
+    src_r = np.clip(rr + flow_v.astype(np.float32), 0.0, float(h - 1))
+    src_c = np.clip(cc + flow_u.astype(np.float32), 0.0, float(w - 1))
+    warped = map_coordinates(
+        label.astype(np.float32),
+        [src_r, src_c],
+        order=0,
+        mode="nearest",
+    )
+    return warped.astype(np.int32)
+
+
+def _apply_liquify_drags(
+    label: np.ndarray,
+    drags: list[dict],
+    tissue_mask: np.ndarray | None = None,
+) -> np.ndarray:
+    out = label.astype(np.int32).copy()
+    h, w = out.shape[:2]
+    if h < 2 or w < 2 or not drags:
+        return out
+
+    flow_v = np.zeros((h, w), dtype=np.float32)
+    flow_u = np.zeros((h, w), dtype=np.float32)
+
+    for d in drags:
+        try:
+            x1 = float(d.get("x1"))
+            y1 = float(d.get("y1"))
+            x2 = float(d.get("x2"))
+            y2 = float(d.get("y2"))
+        except Exception:
+            continue
+        radius = float(d.get("radius", 80.0))
+        strength = float(d.get("strength", 0.72))
+        radius = float(np.clip(radius, 8.0, 260.0))
+        strength = float(np.clip(strength, 0.05, 1.5))
+        dx = float(x2 - x1)
+        dy = float(y2 - y1)
+        drag_len = float(np.hypot(dx, dy))
+        if drag_len < 0.75:
+            continue
+
+        sigma = max(4.0, radius * 0.46)
+        influence = radius * 1.65
+        y0 = max(0, int(np.floor(y1 - influence)))
+        y1i = min(h, int(np.ceil(y1 + influence + 1)))
+        x0 = max(0, int(np.floor(x1 - influence)))
+        x1i = min(w, int(np.ceil(x1 + influence + 1)))
+        if y1i <= y0 or x1i <= x0:
+            continue
+
+        yy, xx = np.meshgrid(
+            np.arange(y0, y1i, dtype=np.float32),
+            np.arange(x0, x1i, dtype=np.float32),
+            indexing="ij",
+        )
+        dist2 = (yy - y1) ** 2 + (xx - x1) ** 2
+        wt = np.exp(-0.5 * dist2 / (sigma * sigma)).astype(np.float32)
+        wt *= float(strength)
+
+        if tissue_mask is not None and tissue_mask.shape == out.shape:
+            local_tm = tissue_mask[y0:y1i, x0:x1i].astype(np.float32)
+            wt *= local_tm
+
+        flow_u[y0:y1i, x0:x1i] += (dx * wt).astype(np.float32)
+        flow_v[y0:y1i, x0:x1i] += (dy * wt).astype(np.float32)
+
+    if not np.any(flow_u) and not np.any(flow_v):
+        return out
+
+    flow_u = gaussian_filter(flow_u, sigma=1.0).astype(np.float32)
+    flow_v = gaussian_filter(flow_v, sigma=1.0).astype(np.float32)
+    mag = np.hypot(flow_u, flow_v)
+    max_disp = float(np.percentile(mag, 99.5))
+    max_allowed = float(max(6.0, min(h, w) * 0.11))
+    if max_disp > max_allowed:
+        s = max_allowed / max(max_disp, 1e-6)
+        flow_u *= float(s)
+        flow_v *= float(s)
+
+    warped = _warp_label_with_flow(out, flow_v=flow_v, flow_u=flow_u)
+    return warped.astype(np.int32)
+
+
+def _save_calibration_pair(
+    real_path: Path,
+    corrected_overlay_png: Path,
+    manifest: dict,
+    real_z_index: int | None = None,
+) -> dict:
+    train_dir = PROJECT_ROOT / "train_data_set"
+    train_dir.mkdir(parents=True, exist_ok=True)
+    sid = _next_train_pair_id(train_dir)
+    ori_png = train_dir / f"{sid}_Ori.png"
+    show_png = train_dir / f"{sid}_Show.png"
+
+    real_raw = imread(str(real_path))
+    real2d, _meta = select_real_slice_2d(real_raw, z_index=real_z_index, source_path=real_path)
+    real_u8 = _norm_u8_robust(real2d)
+    real_rgb = np.stack([real_u8, real_u8, real_u8], axis=-1).astype(np.uint8)
+    Image.fromarray(real_rgb).save(ori_png)
+    shutil.copy2(corrected_overlay_png, show_png)
+
+    calib_dir = OUTPUT_DIR / "manual_calibration"
+    calib_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = calib_dir / f"calibration_sample_{sid}.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    prune = _prune_trainset_if_needed(train_dir, max_samples=MAX_CALIB_SAMPLES)
+
+    return {
+        "sample_id": int(sid),
+        "ori_png": str(ori_png),
+        "show_png": str(show_png),
+        "manifest_json": str(manifest_path),
+        "sample_limit": int(MAX_CALIB_SAMPLES),
+        "prune": prune,
+    }
+
+
+def _learn_from_trainset_async():
+    if learning_state.get("running"):
+        return False
+
+    def _worker():
+        learning_state.update(
+            {
+                "running": True,
+                "started_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                "finished_at": "",
+                "ok": None,
+                "error": "",
+                "out_json": str(OUTPUT_DIR / "trainset_tuned_params.json"),
+                "log_tail": [],
+            }
+        )
+        cmd = [
+            sys.executable,
+            str(PROJECT_ROOT / "scripts" / "learn_from_trainset.py"),
+            "--train-dir",
+            str(PROJECT_ROOT / "train_data_set"),
+            "--annotation",
+            str(PROJECT_ROOT / "annotation_25.nii.gz"),
+            "--out-json",
+            str(OUTPUT_DIR / "trainset_tuned_params.json"),
+            "--fit-modes",
+            "contain,cover",
+            "--smooth-values",
+            "0,1",
+            "--profiles",
+            "balanced,internal_strong",
+            "--sample-limit",
+            str(MAX_CALIB_SAMPLES),
+        ]
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(PROJECT_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            lines: list[str] = []
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    lines.append(line)
+                    if len(lines) > 40:
+                        lines = lines[-40:]
+            code = proc.wait()
+            learning_state["ok"] = bool(code == 0)
+            if code != 0:
+                learning_state["error"] = f"learn_from_trainset exited with code {code}"
+            learning_state["log_tail"] = lines
+        except Exception as e:
+            learning_state["ok"] = False
+            learning_state["error"] = str(e)
+        finally:
+            learning_state["running"] = False
+            learning_state["finished_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return True
 
 
 def _load_hover_label() -> np.ndarray | None:
@@ -229,12 +504,19 @@ def index():
 
 @app.get('/api/info')
 def info():
+    default_atlas = PROJECT_ROOT / "annotation_25.nii.gz"
+    default_struct = PROJECT_ROOT / "configs" / "1_adult_mouse_brain_graph_mapping.csv"
     return jsonify({
         "app": "IdleBrainUI",
         "version": "0.3.0-desktop",
         "frontend": str(ROOT),
         "project": str(PROJECT_ROOT),
         "outputs": str(OUTPUT_DIR),
+        "defaults": {
+            "atlasPath": str(default_atlas),
+            "structPath": str(default_struct) if default_struct.exists() else "",
+            "sampleLimit": int(MAX_CALIB_SAMPLES),
+        },
     })
 
 
@@ -360,6 +642,10 @@ def overlay_preview():
     flip_mode = payload.get('flipAtlas', 'none')
     fit_mode = payload.get('fitMode', 'cover')
     major_top_k = int(payload.get('majorTopK', 20))
+    edge_smooth_iter = int(payload.get('edgeSmoothIter', 1))
+    warp_params = payload.get('warpParams', {})
+    if not isinstance(warp_params, dict):
+        warp_params = {}
 
     if not real_path.exists() or not label_path.exists():
         return jsonify({"ok": False, "error": "real or label path not found"}), 400
@@ -380,6 +666,8 @@ def overlay_preview():
             return_meta=True,
             major_top_k=major_top_k,
             fit_mode=fit_mode,
+            edge_smooth_iter=edge_smooth_iter,
+            warp_params=warp_params,
             warped_label_out=_HOVER_LABEL_PATH,
             real_z_index=real_z_index,
             label_z_index=label_z_index,
@@ -400,12 +688,205 @@ def overlay_preview():
             'rotateAtlas': rotate_deg,
             'flipAtlas': flip_mode,
             'fitMode': fit_mode,
+            'edgeSmoothIter': edge_smooth_iter,
+            'warpParams': warp_params,
             'realZIndex': real_z_index,
             'labelZIndex': label_z_index,
             'error': str(e)
         }, indent=2), encoding='utf-8')
         return jsonify({"ok": False, "error": str(e), "failCase": str(fail_json)}), 400
     return jsonify({"ok": True, "preview": str(out), "minMeanThreshold": min_mean, "diagnostic": diagnostic})
+
+
+@app.post('/api/overlay/liquify-drag')
+def overlay_liquify_drag():
+    payload = request.get_json(force=True)
+    real_path = Path(payload.get('realPath', ''))
+    label_path_payload = Path(payload.get('labelPath', '')) if payload.get('labelPath') else None
+    raw_real_z = payload.get('realZIndex', None)
+    real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
+    alpha = float(payload.get('alpha', 0.45))
+    mode = str(payload.get('mode', 'fill'))
+    structure_csv = Path(payload.get('structureCsv', '')) if payload.get('structureCsv') else None
+    min_mean = float(payload.get('minMeanThreshold', 8.0))
+    pixel_size_um = float(payload.get('pixelSizeUm', 0.65))
+    rotate_deg = float(payload.get('rotateAtlas', 0.0))
+    flip_mode = payload.get('flipAtlas', 'none')
+    fit_mode = payload.get('fitMode', 'cover')
+    major_top_k = int(payload.get('majorTopK', 20))
+    edge_smooth_iter = int(payload.get('edgeSmoothIter', 1))
+    warp_params = payload.get('warpParams', {})
+    if not isinstance(warp_params, dict):
+        warp_params = {}
+
+    if not real_path.exists():
+        return jsonify({"ok": False, "error": "real path not found"}), 400
+
+    if _HOVER_LABEL_PATH.exists():
+        base_label_path = _HOVER_LABEL_PATH
+    elif label_path_payload is not None and label_path_payload.exists():
+        base_label_path = label_path_payload
+    else:
+        return jsonify({"ok": False, "error": "no aligned preview label available; run preview first"}), 400
+
+    drags = payload.get('drags', [])
+    if not isinstance(drags, list):
+        drags = []
+    if not drags and all(k in payload for k in ('x1', 'y1', 'x2', 'y2')):
+        drags = [{
+            "x1": payload.get("x1"),
+            "y1": payload.get("y1"),
+            "x2": payload.get("x2"),
+            "y2": payload.get("y2"),
+            "radius": payload.get("radius", 80),
+            "strength": payload.get("strength", 0.72),
+        }]
+    if not drags:
+        return jsonify({"ok": False, "error": "no drags provided"}), 400
+
+    try:
+        lbl_raw = imread(str(base_label_path))
+        lbl2d, _ = select_label_slice_2d(lbl_raw)
+        tissue = lbl2d > 0
+        corrected = _apply_liquify_drags(lbl2d.astype(np.int32), drags=drags, tissue_mask=tissue)
+
+        calib_dir = OUTPUT_DIR / "manual_calibration"
+        calib_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        corrected_label_path = calib_dir / f'manual_warped_label_{ts}.tif'
+        imwrite(str(corrected_label_path), corrected.astype(np.int32))
+        imwrite(str(_HOVER_LABEL_PATH), corrected.astype(np.int32))
+
+        out = OUTPUT_DIR / 'overlay_preview.png'
+        _, diagnostic = render_overlay(
+            real_path,
+            corrected_label_path,
+            out,
+            alpha=alpha,
+            mode=mode,
+            structure_csv=structure_csv,
+            min_mean_threshold=min_mean,
+            pixel_size_um=pixel_size_um,
+            rotate_deg=rotate_deg,
+            flip_mode=flip_mode,
+            return_meta=True,
+            major_top_k=major_top_k,
+            fit_mode=fit_mode,
+            edge_smooth_iter=edge_smooth_iter,
+            warp_params=warp_params,
+            warped_label_out=_HOVER_LABEL_PATH,
+            real_z_index=real_z_index,
+            prewarped_label=True,
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    return jsonify({
+        "ok": True,
+        "preview": str(out),
+        "correctedLabelPath": str(corrected_label_path),
+        "diagnostic": diagnostic,
+    })
+
+
+@app.post('/api/overlay/calibration/finalize')
+def overlay_calibration_finalize():
+    payload = request.get_json(force=True)
+    real_path = Path(payload.get('realPath', ''))
+    if not real_path.exists():
+        return jsonify({"ok": False, "error": "real path not found"}), 400
+    if not _HOVER_LABEL_PATH.exists():
+        return jsonify({"ok": False, "error": "no calibrated label to finalize"}), 400
+
+    raw_real_z = payload.get('realZIndex', None)
+    real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
+    alpha = float(payload.get('alpha', 0.45))
+    mode = str(payload.get('mode', 'fill'))
+    structure_csv = Path(payload.get('structureCsv', '')) if payload.get('structureCsv') else None
+    min_mean = float(payload.get('minMeanThreshold', 8.0))
+    pixel_size_um = float(payload.get('pixelSizeUm', 0.65))
+    rotate_deg = float(payload.get('rotateAtlas', 0.0))
+    flip_mode = payload.get('flipAtlas', 'none')
+    fit_mode = payload.get('fitMode', 'cover')
+    major_top_k = int(payload.get('majorTopK', 20))
+    edge_smooth_iter = int(payload.get('edgeSmoothIter', 1))
+    warp_params = payload.get('warpParams', {})
+    if not isinstance(warp_params, dict):
+        warp_params = {}
+    auto_learn = bool(payload.get('autoLearn', True))
+    note = str(payload.get('note', '')).strip()
+
+    calib_dir = OUTPUT_DIR / "manual_calibration"
+    calib_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    final_overlay = calib_dir / f'calibrated_overlay_{ts}.png'
+    final_label = calib_dir / f'calibrated_label_{ts}.tif'
+    shutil.copy2(_HOVER_LABEL_PATH, final_label)
+
+    try:
+        _, diagnostic = render_overlay(
+            real_path,
+            final_label,
+            final_overlay,
+            alpha=alpha,
+            mode=mode,
+            structure_csv=structure_csv,
+            min_mean_threshold=min_mean,
+            pixel_size_um=pixel_size_um,
+            rotate_deg=rotate_deg,
+            flip_mode=flip_mode,
+            return_meta=True,
+            major_top_k=major_top_k,
+            fit_mode=fit_mode,
+            edge_smooth_iter=edge_smooth_iter,
+            warp_params=warp_params,
+            real_z_index=real_z_index,
+            prewarped_label=True,
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    manifest = {
+        "timestamp": ts,
+        "note": note,
+        "realPath": str(real_path),
+        "realZIndex": real_z_index,
+        "calibratedLabelPath": str(final_label),
+        "calibratedOverlayPath": str(final_overlay),
+        "mode": mode,
+        "alpha": alpha,
+        "fitMode": fit_mode,
+        "pixelSizeUm": pixel_size_um,
+        "rotateAtlas": rotate_deg,
+        "flipAtlas": flip_mode,
+        "majorTopK": major_top_k,
+        "edgeSmoothIter": edge_smooth_iter,
+        "warpParams": warp_params,
+        "diagnostic": diagnostic,
+    }
+    pair = _save_calibration_pair(
+        real_path=real_path,
+        corrected_overlay_png=final_overlay,
+        manifest=manifest,
+        real_z_index=real_z_index,
+    )
+
+    learning_started = False
+    if auto_learn:
+        learning_started = _learn_from_trainset_async()
+
+    return jsonify({
+        "ok": True,
+        "sample": pair,
+        "autoLearn": auto_learn,
+        "learningStarted": bool(learning_started),
+        "learnStatus": learning_state,
+    })
+
+
+@app.get('/api/calibration/learn-status')
+def calibration_learn_status():
+    return jsonify({"ok": True, "state": learning_state})
 
 
 @app.get("/api/outputs/leaf")
@@ -430,6 +911,37 @@ def outputs_overlay_preview():
     if not fp.exists():
         return jsonify({"ok": False, "error": "overlay preview not found"}), 404
     return send_from_directory(fp.parent, fp.name)
+
+
+@app.post('/api/overlay/export')
+def overlay_export():
+    payload = request.get_json(force=True)
+    fmt = str(payload.get("format", "png")).strip().lower()
+    allowed = {"png", "jpg", "jpeg", "tif", "tiff", "bmp"}
+    if fmt not in allowed:
+        return jsonify({"ok": False, "error": f"unsupported format: {fmt}"}), 400
+
+    src = OUTPUT_DIR / "overlay_preview.png"
+    if not src.exists():
+        return jsonify({"ok": False, "error": "overlay preview not found"}), 404
+
+    export_dir = OUTPUT_DIR / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    ext = "jpg" if fmt == "jpeg" else "tif" if fmt == "tiff" else fmt
+    out = export_dir / f"overlay_export_{ts}.{ext}"
+    try:
+        with Image.open(src) as im:
+            if ext in ("jpg",):
+                im.convert("RGB").save(out, quality=95)
+            elif ext in ("tif",):
+                im.save(out, compression="tiff_lzw")
+            else:
+                im.save(out)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    return jsonify({"ok": True, "path": str(out), "format": ext})
 
 
 @app.get('/api/overlay/region-at')
@@ -686,6 +1198,10 @@ def overlay_atlas_layer():
     rotate_deg = float(payload.get('rotateAtlas', 0.0))
     flip_mode = payload.get('flipAtlas', 'none')
     fit_mode = payload.get('fitMode', 'cover')
+    edge_smooth_iter = int(payload.get('edgeSmoothIter', 1))
+    warp_params = payload.get('warpParams', {})
+    if not isinstance(warp_params, dict):
+        warp_params = {}
     raw_real_z = payload.get('realZIndex', None)
     raw_label_z = payload.get('labelZIndex', None)
     real_z_index = None if raw_real_z in (None, "", "null") else int(raw_real_z)
@@ -703,6 +1219,8 @@ def overlay_atlas_layer():
             structure_csv=structure_csv, pixel_size_um=pixel_size_um,
             rotate_deg=rotate_deg, flip_mode=flip_mode, return_meta=True,
             major_top_k=20, fit_mode=fit_mode,
+            edge_smooth_iter=edge_smooth_iter,
+            warp_params=warp_params,
             real_z_index=real_z_index, label_z_index=label_z_index,
         )
         return jsonify({"ok": True, "diagnostic": diagnostic})
