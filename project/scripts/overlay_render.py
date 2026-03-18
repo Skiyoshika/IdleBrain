@@ -2888,7 +2888,7 @@ def _tissue_guided_warp(
         enable_nonlinear = False
     _enable_contour_conform = (
         skip_linear_opt
-        and _detected_tissue_mask is not None
+        and tissue_mask is not None
         and bool(_warp_param(warp_params, "enable_silhouette_conform", True))
     )
 
