@@ -1,0 +1,4 @@
+Pillow==10.2.0
+pynrrd==1.0.0
+pyinstaller==6.6.0
+pystray==0.19.5

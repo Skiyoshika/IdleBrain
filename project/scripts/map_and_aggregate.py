@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import pandas as pd
+
+try:
+    from scripts.structure_tree import load_structure_table, parse_structure_id_path
+except Exception:
+    from structure_tree import load_structure_table, parse_structure_id_path
 
 
 def map_cells_to_regions(cells_csv: Path, atlas_map_csv: Path) -> pd.DataFrame:
@@ -20,28 +26,110 @@ def map_cells_to_regions(cells_csv: Path, atlas_map_csv: Path) -> pd.DataFrame:
 
 
 def aggregate_by_region(mapped: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if mapped.empty:
+        empty_leaf = pd.DataFrame(
+            columns=["region_id", "region_name", "acronym", "hemisphere", "count", "confidence"]
+        )
+        empty_hierarchy = pd.DataFrame(
+            columns=[
+                "region_id",
+                "region_name",
+                "acronym",
+                "parent_structure_id",
+                "hemisphere",
+                "depth",
+                "count",
+                "confidence",
+            ]
+        )
+        return empty_leaf, empty_hierarchy
+
+    total_cells = max(int(len(mapped)), 1)
     leaf = (
-        mapped.groupby(["region_id", "region_name", "hemisphere"], as_index=False)
+        mapped.groupby(["region_id", "region_name", "acronym", "hemisphere"], as_index=False)
         .size()
         .rename(columns={"size": "count"})
     )
+    leaf["confidence"] = leaf["count"].astype(float) / float(total_cells)
 
-    # Simplified hierarchy placeholder: aggregate by region_name prefix
-    mapped = mapped.copy()
-    mapped["parent_region"] = mapped["region_name"].map(
-        lambda x: x.split("/")[0] if isinstance(x, str) and "/" in x else x
+    if "structure_source" not in mapped.columns:
+        empty_hierarchy = pd.DataFrame(
+            columns=[
+                "region_id",
+                "region_name",
+                "acronym",
+                "parent_structure_id",
+                "hemisphere",
+                "depth",
+                "count",
+                "confidence",
+            ]
+        )
+        return leaf, empty_hierarchy
+    structure_sources = [
+        x for x in mapped["structure_source"].dropna().astype(str).unique().tolist() if x
+    ]
+    if not structure_sources:
+        empty_hierarchy = pd.DataFrame(
+            columns=[
+                "region_id",
+                "region_name",
+                "acronym",
+                "parent_structure_id",
+                "hemisphere",
+                "depth",
+                "count",
+                "confidence",
+            ]
+        )
+        return leaf, empty_hierarchy
+
+    structure_df = load_structure_table(Path(structure_sources[0]))
+    structure_meta = structure_df[
+        ["id", "name", "acronym", "parent_structure_id", "depth", "graph_order"]
+    ].rename(columns={"id": "region_id", "name": "region_name"})
+
+    hierarchy_rows: list[dict] = []
+    for row in mapped[["structure_id_path", "hemisphere"]].itertuples(index=False):
+        for region_id in parse_structure_id_path(row.structure_id_path):
+            hierarchy_rows.append({"region_id": int(region_id), "hemisphere": row.hemisphere})
+
+    hierarchy = pd.DataFrame(hierarchy_rows)
+    if hierarchy.empty:
+        hierarchy = pd.DataFrame(
+            columns=[
+                "region_id",
+                "region_name",
+                "acronym",
+                "parent_structure_id",
+                "hemisphere",
+                "depth",
+                "count",
+                "confidence",
+            ]
+        )
+    else:
+        hierarchy = (
+            hierarchy.groupby(["region_id", "hemisphere"], as_index=False)
+            .size()
+            .rename(columns={"size": "count"})
+        )
+        hierarchy = hierarchy.merge(structure_meta, on="region_id", how="left")
+        hierarchy["confidence"] = hierarchy["count"].astype(float) / float(total_cells)
+        hierarchy = hierarchy.sort_values(["depth", "region_id", "hemisphere"]).reset_index(
+            drop=True
+        )
+
+    leaf = (
+        leaf.merge(
+            structure_meta[["region_id", "parent_structure_id", "depth", "graph_order"]],
+            on="region_id",
+            how="left",
+        )
+        .sort_values(["graph_order", "region_id", "hemisphere"])
+        .reset_index(drop=True)
     )
-    hierarchy = (
-        mapped.groupby(["parent_region", "hemisphere"], as_index=False)
-        .size()
-        .rename(columns={"size": "count"})
-    )
 
-    def confidence(n: int) -> str:
-        return "high" if n > 100 else ("medium" if n > 20 else "low")
-
-    leaf["confidence"] = leaf["count"].map(confidence)
-    hierarchy["confidence"] = hierarchy["count"].map(confidence)
     return leaf, hierarchy
 
 

@@ -8,11 +8,37 @@ Usage:
     paths.outputs.mkdir(parents=True, exist_ok=True)
     cells_csv = paths.cells_detected
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+
+def bootstrap_sys_path() -> Path:
+    """Ensure PROJECT_ROOT is on sys.path. Idempotent; frozen-EXE aware.
+
+    Call this at the top of any standalone script that needs to import from
+    ``scripts.*`` or ``project.*``.  Returns PROJECT_ROOT.
+
+    Example (at top of script, before any project imports)::
+
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from scripts.paths import bootstrap_sys_path
+        PROJECT_ROOT = bootstrap_sys_path()
+    """
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        project_root = Path(sys._MEIPASS)
+    else:
+        # __file__ is scripts/paths.py → parents[1] is project/
+        project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    return project_root
 
 
 @dataclass
@@ -50,7 +76,7 @@ class RunPaths:
         cls,
         project_root: Path,
         cfg: dict[str, Any],
-    ) -> "RunPaths":
+    ) -> RunPaths:
         outputs_cfg = cfg.get("outputs", {})
         outputs = project_root / "outputs"
 

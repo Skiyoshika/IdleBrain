@@ -5,14 +5,14 @@
     "slice_glob": "*.tif",
     "sampling_mode": "merge5",
     "slice_interval_n": 5,
-    "pixel_size_um_xy": "TODO",
-    "slice_spacing_um": "TODO",
+    "pixel_size_um_xy": 0.65,
+    "slice_spacing_um": 25.0,
     "bit_depth": 16,
     "channel_map": {"red": 0, "green": 1, "farred": 2},
     "active_channel": "red"
   },
   "target": {
-    "marker": "TODO",
+    "marker": "unspecified",
     "signal_type": "cyto"
   },
   "compute": {

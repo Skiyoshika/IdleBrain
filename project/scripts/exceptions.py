@@ -6,17 +6,20 @@ Usage:
 
     raise RegistrationError("No tissue mask found", slice_idx=42)
 """
+
 from __future__ import annotations
 
 
 class BrainfastError(Exception):
     """Base class for all Brainfast errors. Always catch this in top-level handlers."""
 
+
 # Backwards-compat alias
 IdleBrainError = BrainfastError
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
+
 
 class PipelineError(BrainfastError):
     """Raised when the overall pipeline cannot continue."""
@@ -35,6 +38,7 @@ class ConfigError(BrainfastError):
 
 
 # ── Registration ──────────────────────────────────────────────────────────────
+
 
 class RegistrationError(BrainfastError):
     """Raised when atlas registration fails for a slice."""
@@ -61,6 +65,7 @@ class AlignmentScoreError(RegistrationError):
 
 # ── Detection ─────────────────────────────────────────────────────────────────
 
+
 class DetectionError(BrainfastError):
     """Raised when cell detection fails for a slice."""
 
@@ -71,6 +76,7 @@ class DetectionError(BrainfastError):
 
 
 # ── I/O ───────────────────────────────────────────────────────────────────────
+
 
 class InputError(BrainfastError):
     """Raised for missing or unreadable input files / directories."""

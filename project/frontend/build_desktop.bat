@@ -3,7 +3,7 @@ setlocal
 cd /d %~dp0
 
 echo [1/4] Installing / updating dependencies...
-python -m pip install pyinstaller pystray pillow pynrrd -q
+python -m pip install -r requirements-desktop-build.txt -q
 if errorlevel 1 (
   echo [ERROR] pip install failed.
   pause & exit /b 1

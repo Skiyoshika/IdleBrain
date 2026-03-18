@@ -1,4 +1,5 @@
 """api_pipeline.py — Pipeline run/status/cancel/logs/history routes."""
+
 from __future__ import annotations
 
 import json
@@ -21,18 +22,20 @@ def index():
 def info():
     default_atlas = ctx.PROJECT_ROOT / "annotation_25.nii.gz"
     default_struct = ctx.DEFAULT_STRUCTURE_SOURCE
-    return jsonify({
-        "app": "BrainfastUI",
-        "version": "0.3.0-desktop",
-        "frontend": str(ctx.ROOT),
-        "project": str(ctx.PROJECT_ROOT),
-        "outputs": str(ctx.OUTPUT_DIR),
-        "defaults": {
-            "atlasPath": str(default_atlas),
-            "structPath": str(default_struct) if default_struct.exists() else "",
-            "sampleLimit": int(ctx.MAX_CALIB_SAMPLES),
-        },
-    })
+    return jsonify(
+        {
+            "app": "BrainfastUI",
+            "version": "0.3.0-desktop",
+            "frontend": str(ctx.ROOT),
+            "project": str(ctx.PROJECT_ROOT),
+            "outputs": str(ctx.OUTPUT_DIR),
+            "defaults": {
+                "atlasPath": str(default_atlas),
+                "structPath": str(default_struct) if default_struct.exists() else "",
+                "sampleLimit": int(ctx.MAX_CALIB_SAMPLES),
+            },
+        }
+    )
 
 
 @bp.get("/api/validate")
@@ -56,18 +59,25 @@ def validate():
 
 @bp.post("/api/run")
 def run_pipeline():
-    if ctx.run_state["running"]:
-        return jsonify({"ok": False, "error": "pipeline already running"}), 409
+    with ctx._run_state_lock:
+        if ctx.run_state["running"]:
+            return jsonify({"ok": False, "error": "pipeline already running"}), 409
 
     payload = request.get_json(force=True)
-    config = payload.get("configPath") or str(ctx.PROJECT_ROOT / "configs" / "run_config.template.json")
+    config = payload.get("configPath") or str(
+        ctx.PROJECT_ROOT / "configs" / "run_config.template.json"
+    )
     input_dir = payload.get("inputDir", "")
     channels = payload.get("channels", ["red"])
     if isinstance(channels, str):
         channels = [channels]
 
     run_params = payload.get("params", {})
-    t = threading.Thread(target=ctx._runner, args=(config, input_dir, channels, run_params), daemon=True)
+    with ctx._run_state_lock:
+        ctx.run_state["config_path"] = config
+    t = threading.Thread(
+        target=ctx._runner, args=(config, input_dir, channels, run_params), daemon=True
+    )
     t.start()
     return jsonify({"ok": True, "started": True})
 
@@ -75,11 +85,11 @@ def run_pipeline():
 @bp.get("/api/status")
 def status():
     # Count how many slices have been registered (overlay files present)
-    reg_dir = ctx.OUTPUT_DIR / 'registered_slices'
-    slices_done = len(list(reg_dir.glob('slice_*_overlay.png'))) if reg_dir.exists() else 0
+    reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+    slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
     # Count total input slices (merged dir)
-    merged_dir = ctx.OUTPUT_DIR / 'tmp_merged'
-    slices_total = len(list(merged_dir.glob('*.tif'))) if merged_dir.exists() else 0
+    merged_dir = ctx.OUTPUT_DIR / "tmp_merged"
+    slices_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
     return jsonify(
         {
             "running": ctx.run_state["running"],
@@ -96,14 +106,17 @@ def status():
 
 @bp.post("/api/cancel")
 def cancel():
-    p = ctx.run_state.get("proc")
-    if p and ctx.run_state.get("running"):
-        p.terminate()
-        ctx.run_state["error"] = "cancelled by user"
-        ctx.run_state["running"] = False
-        ctx.run_state["done"] = False
-        ctx._append_log("[cancel] user requested stop")
-        return jsonify({"ok": True, "cancelled": True})
+    with ctx._run_state_lock:
+        p = ctx.run_state.get("proc")
+        if p and ctx.run_state.get("running"):
+            p.terminate()
+            ctx.run_state["error"] = "cancelled by user"
+            ctx.run_state["running"] = False
+            ctx.run_state["done"] = False
+            ctx.run_state["current_channel"] = None
+            ctx.run_state["channels"] = []
+            ctx._append_log("[cancel] user requested stop")
+            return jsonify({"ok": True, "cancelled": True})
     return jsonify({"ok": False, "cancelled": False, "error": "no running process"}), 409
 
 
@@ -119,20 +132,20 @@ def history():
 
 @bp.get("/api/export/methods-text")
 def export_methods_text():
-    params_files = sorted(ctx.OUTPUT_DIR.glob('run_params_*.json'), reverse=True)
+    params_files = sorted(ctx.OUTPUT_DIR.glob("run_params_*.json"), reverse=True)
     params = {}
     if params_files:
         try:
-            params = json.loads(params_files[0].read_text(encoding='utf-8'))
+            params = json.loads(params_files[0].read_text(encoding="utf-8"))
         except Exception:
             pass
-    align_mode = params.get('alignMode', 'affine')
-    align_cn = '仿射变换 (affine)' if align_mode == 'affine' else '非线性变换 (nonlinear/TPS)'
-    align_en = 'affine' if align_mode == 'affine' else 'nonlinear (thin-plate spline)'
-    pixel_size = params.get('pixelSizeUm', '0.65')
-    channels = params.get('channels', ['red'])
-    ch_str = ', '.join(channels)
-    ts = params.get('timestamp', '—')
+    align_mode = params.get("alignMode", "affine")
+    align_cn = "仿射变换 (affine)" if align_mode == "affine" else "非线性变换 (nonlinear/TPS)"
+    align_en = "affine" if align_mode == "affine" else "nonlinear (thin-plate spline)"
+    pixel_size = params.get("pixelSizeUm", "0.65")
+    channels = params.get("channels", ["red"])
+    ch_str = ", ".join(channels)
+    ts = params.get("timestamp", "—")
     text_cn = (
         f"【方法段落参考（中文）】\n"
         f"脑图谱配准使用 Brainfast v0.3 完成（运行时间：{ts}）。"

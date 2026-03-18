@@ -4,31 +4,31 @@ All blueprint modules must access state via `import project.frontend.server_cont
 and reference `ctx.run_state`, `ctx.OUTPUT_DIR`, etc. — never import names directly —
 so that mutations made here propagate correctly to all blueprints.
 """
+
 from __future__ import annotations
 
+import datetime
+import json
 import os
+import shutil
+import subprocess
 import sys
 import threading
-import uuid as _uuid_mod
-import subprocess
-import shutil
-import json
-import datetime
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from flask import request
-from tifffile import imread, imwrite
-import numpy as np
-from scipy.ndimage import map_coordinates, gaussian_filter
 from PIL import Image
+from scipy.ndimage import gaussian_filter, map_coordinates
+from tifffile import imread
 
 # ---------------------------------------------------------------------------
 # Paths – populated by server.py (thin orchestrator) before any request
 # ---------------------------------------------------------------------------
-ROOT: Path = Path(__file__).resolve().parent          # frontend dir
-PROJECT_ROOT: Path = ROOT.parent                       # project dir
+ROOT: Path = Path(__file__).resolve().parent  # frontend dir
+PROJECT_ROOT: Path = ROOT.parent  # project dir
 OUTPUT_DIR: Path = PROJECT_ROOT / "outputs"
 
 # ---------------------------------------------------------------------------
@@ -41,8 +41,10 @@ DEFAULT_JOB_ID = "default"
 # ---------------------------------------------------------------------------
 # Shared mutable state
 # ---------------------------------------------------------------------------
-_autopick_tasks: dict = {}   # token -> {status, progress, step, total, message, result, error}
-_preview_tasks: dict = {}    # token -> {status, progress, message, result, error}
+_autopick_tasks: dict = {}  # token -> {status, progress, step, total, message, result, error}
+_preview_tasks: dict = {}  # token -> {status, progress, message, result, error}
+_task_lock = threading.Lock()
+_run_state_lock = threading.Lock()
 
 run_state: dict = {
     "running": False,
@@ -53,8 +55,10 @@ run_state: dict = {
     "proc": None,
     "current_channel": None,
     "history": [],
+    "config_path": None,
 }
 
+_learning_lock = threading.Lock()
 learning_state: dict = {
     "running": False,
     "started_at": "",
@@ -71,25 +75,9 @@ _hover_parent_cache: dict = {"csv": "", "mtime": 0.0, "map": {}}
 _last_preview_structure_csv: dict[str, str] = {}
 
 # ---------------------------------------------------------------------------
-# Lazy script imports (deferred so PROJECT_ROOT can be set first)
-# ---------------------------------------------------------------------------
-def _get_scripts():
-    """Return a namespace of all script-level imports, resolved lazily."""
-    from scripts.overlay_render import render_overlay
-    from scripts.ai_landmark import propose_landmarks, score_alignment, score_alignment_edges
-    from scripts.align_ai import apply_landmark_affine
-    from scripts.align_nonlinear import apply_landmark_nonlinear
-    from scripts.compare_render import render_before_after
-    from scripts.atlas_autopick import autopick_best_z
-    from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
-    from scripts.exceptions import BrainfastError
-    from scripts.image_utils import norm_u8_robust
-    return locals()
-
-
-# ---------------------------------------------------------------------------
 # Path helpers
 # ---------------------------------------------------------------------------
+
 
 def _sanitize_job_id(raw: object) -> str:
     text = str(raw or "").strip()
@@ -139,6 +127,7 @@ def _append_log(line: str):
 # ---------------------------------------------------------------------------
 # Training-set helpers
 # ---------------------------------------------------------------------------
+
 
 def _next_train_pair_id(train_dir: Path) -> int:
     n = 1
@@ -206,6 +195,7 @@ def _prune_trainset_if_needed(train_dir: Path, max_samples: int) -> dict:
 # ---------------------------------------------------------------------------
 # Liquify / warp helpers
 # ---------------------------------------------------------------------------
+
 
 def _warp_label_with_flow(label: np.ndarray, flow_v: np.ndarray, flow_u: np.ndarray) -> np.ndarray:
     h, w = label.shape[:2]
@@ -302,6 +292,7 @@ def _apply_liquify_drags(
 # Calibration save / learn
 # ---------------------------------------------------------------------------
 
+
 def _save_calibration_pair(
     real_path: Path,
     corrected_label_tif: Path,
@@ -309,8 +300,8 @@ def _save_calibration_pair(
     manifest: dict,
     real_z_index: int | None = None,
 ) -> dict:
-    from scripts.slice_select import select_real_slice_2d
     from scripts.image_utils import norm_u8_robust
+    from scripts.slice_select import select_real_slice_2d
 
     train_dir = PROJECT_ROOT / "train_data_set"
     train_dir.mkdir(parents=True, exist_ok=True)
@@ -346,13 +337,14 @@ def _save_calibration_pair(
 
 
 def _learn_from_trainset_async():
-    if learning_state.get("running"):
-        return False
+    with _learning_lock:
+        if learning_state.get("running"):
+            return False
+        learning_state["running"] = True  # reserve under lock before spawning thread
 
     def _worker():
         learning_state.update(
             {
-                "running": True,
                 "started_at": datetime.datetime.now().isoformat(timespec="seconds"),
                 "finished_at": "",
                 "ok": None,
@@ -416,6 +408,7 @@ def _learn_from_trainset_async():
 # Hover / label cache helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_hover_label(job_id: str | None = None) -> np.ndarray | None:
     global _hover_label_cache
     hover_label_path = _job_file(job_id, "overlay_label_preview.tif")
@@ -462,7 +455,10 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
         return {}
 
     mtime = float(p.stat().st_mtime)
-    if _hover_parent_cache.get("csv") == str(p) and float(_hover_parent_cache.get("mtime", 0.0)) == mtime:
+    if (
+        _hover_parent_cache.get("csv") == str(p)
+        and float(_hover_parent_cache.get("mtime", 0.0)) == mtime
+    ):
         return _hover_parent_cache.get("map", {})
 
     if p.suffix.lower() == ".json":
@@ -499,17 +495,32 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
         return {}
 
     col_map = {str(c).strip().lower(): str(c) for c in df.columns}
-    id_col = next((col_map[k] for k in ["id", "structure_id", "region_id", "atlas_id"] if k in col_map), None)
+    id_col = next(
+        (col_map[k] for k in ["id", "structure_id", "region_id", "atlas_id"] if k in col_map), None
+    )
     if id_col is None:
         _hover_parent_cache = {"csv": str(p), "mtime": mtime, "map": {}}
         return {}
 
     parent_name_col = next(
-        (col_map[k] for k in ["parent_name", "parent_region_name", "parent_structure_name"] if k in col_map),
+        (
+            col_map[k]
+            for k in ["parent_name", "parent_region_name", "parent_structure_name"]
+            if k in col_map
+        ),
         None,
     )
-    parent_id_col = next((col_map[k] for k in ["parent_structure_id", "parent_id", "parent"] if k in col_map), None)
-    name_col = next((col_map[k] for k in ["name", "region_name", "structure_name", "safe_name"] if k in col_map), None)
+    parent_id_col = next(
+        (col_map[k] for k in ["parent_structure_id", "parent_id", "parent"] if k in col_map), None
+    )
+    name_col = next(
+        (
+            col_map[k]
+            for k in ["name", "region_name", "structure_name", "safe_name"]
+            if k in col_map
+        ),
+        None,
+    )
 
     out: dict[int, str] = {}
     try:
@@ -541,77 +552,119 @@ def _build_parent_name_map(structure_csv_path: str) -> dict[int, str]:
 # Pipeline runner thread
 # ---------------------------------------------------------------------------
 
+
 def _runner(config_path: str, input_dir: str, channels: list[str], run_params=None):
-    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_state.update({"running": True, "done": False, "error": None, "channels": channels, "logs": [], "startTime": ts})
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_state.update(
+        {
+            "running": True,
+            "done": False,
+            "error": None,
+            "channels": channels,
+            "logs": [],
+            "startTime": ts,
+        }
+    )
 
     # Save run params for reproducibility / paper methods section
     if run_params:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         params_to_save = dict(run_params)
-        params_to_save['timestamp'] = ts
-        params_to_save['channels'] = channels
+        params_to_save["timestamp"] = ts
+        params_to_save["channels"] = channels
         try:
-            (OUTPUT_DIR / f'run_params_{ts}.json').write_text(
-                json.dumps(params_to_save, indent=2, ensure_ascii=False), encoding='utf-8'
+            (OUTPUT_DIR / f"run_params_{ts}.json").write_text(
+                json.dumps(params_to_save, indent=2, ensure_ascii=False), encoding="utf-8"
             )
         except Exception:
             pass
 
-    for ch in channels:
-        run_state["current_channel"] = ch
-        _append_log(f"[run] channel={ch}")
-        cmd = [
-            sys.executable,
-            str(PROJECT_ROOT / "scripts" / "main.py"),
-            "--config",
-            config_path,
-            "--run-real-input",
-            input_dir,
-        ]
-        env = os.environ.copy()
-        env["BRAINCOUNT_ACTIVE_CHANNEL"] = ch
+    try:
+        for ch in channels:
+            run_state["current_channel"] = ch
+            _append_log(f"[run] channel={ch}")
+            cmd = [
+                sys.executable,
+                str(PROJECT_ROOT / "scripts" / "main.py"),
+                "--config",
+                config_path,
+                "--run-real-input",
+                input_dir,
+            ]
+            env = os.environ.copy()
+            env["BRAINCOUNT_ACTIVE_CHANNEL"] = ch
 
-        p = subprocess.Popen(
-            cmd,
-            cwd=str(PROJECT_ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=env,
+            p = subprocess.Popen(
+                cmd,
+                cwd=str(PROJECT_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=env,
+            )
+            run_state["proc"] = p
+            assert p.stdout is not None
+            for line in p.stdout:
+                _append_log(line)
+            code = p.wait()
+            _append_log(f"[exit] channel={ch} code={code}")
+            if code == 0:
+                leaf = OUTPUT_DIR / "cell_counts_leaf.csv"
+                if leaf.exists():
+                    shutil.copy2(leaf, OUTPUT_DIR / f"cell_counts_leaf_{ch}.csv")
+            else:
+                run_state["error"] = f"channel {ch} failed with code {code}"
+                break
+
+        run_state["done"] = run_state["error"] is None
+        run_state["history"].append(
+            {
+                "channels": channels,
+                "ok": run_state["error"] is None,
+                "error": run_state["error"],
+                "logCount": len(run_state["logs"]),
+                "timestamp": ts,
+            }
         )
-        run_state["proc"] = p
-        assert p.stdout is not None
-        for line in p.stdout:
-            _append_log(line)
-        code = p.wait()
-        _append_log(f"[exit] channel={ch} code={code}")
-        if code == 0:
-            leaf = OUTPUT_DIR / "cell_counts_leaf.csv"
-            if leaf.exists():
-                shutil.copy2(leaf, OUTPUT_DIR / f"cell_counts_leaf_{ch}.csv")
-        else:
-            run_state["error"] = f"channel {ch} failed with code {code}"
-            break
+        if len(run_state["history"]) > 20:
+            run_state["history"] = run_state["history"][-20:]
+    except Exception as exc:
+        run_state["error"] = f"pipeline crashed: {exc}"
+        run_state["done"] = False
+        _append_log(f"[crash] {exc}")
+    finally:
+        run_state["running"] = False
+        run_state["proc"] = None
+        run_state["current_channel"] = None
 
-    run_state["running"] = False
-    run_state["done"] = run_state["error"] is None
-    run_state["proc"] = None
-    run_state["current_channel"] = None
-    run_state["history"].append({
-        "channels": channels,
-        "ok": run_state["error"] is None,
-        "error": run_state["error"],
-        "logCount": len(run_state["logs"]),
-        "timestamp": ts,
-    })
-    if len(run_state["history"]) > 20:
-        run_state["history"] = run_state["history"][-20:]
+
+# ---------------------------------------------------------------------------
+# Task cleanup
+# ---------------------------------------------------------------------------
+
+_MAX_PREVIEW_CSV_CACHE = 50
+
+
+def _cleanup_stale_tasks(max_age_s: float = 3600.0) -> None:
+    """Remove finished tasks older than *max_age_s* seconds (default 1 hour)."""
+    cutoff = time.time() - max_age_s
+    with _task_lock:
+        for tasks_dict in (_autopick_tasks, _preview_tasks):
+            for token in list(tasks_dict.keys()):
+                t = tasks_dict[token]
+                if t.get("status") in ("done", "error") and t.get("_finished_at", 0.0) < cutoff:
+                    del tasks_dict[token]
+        # Cap _last_preview_structure_csv to prevent unbounded growth
+        if len(_last_preview_structure_csv) > _MAX_PREVIEW_CSV_CACHE:
+            overflow = len(_last_preview_structure_csv) - _MAX_PREVIEW_CSV_CACHE
+            for old_key in list(_last_preview_structure_csv.keys())[:overflow]:
+                del _last_preview_structure_csv[old_key]
 
 
 # ---------------------------------------------------------------------------
 # Atlas autopick worker thread
 # ---------------------------------------------------------------------------
+
 
 def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwargs: dict):
     from scripts.atlas_autopick import autopick_best_z
@@ -628,14 +681,32 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
     try:
         task["status"] = "running"
         res = autopick_best_z(real_path, annotation_path, out_label, progress_cb=cb, **kwargs)
-        task.update({"status": "done", "progress": 100, "message": "Done!", "result": res})
+        task.update(
+            {
+                "status": "done",
+                "progress": 100,
+                "message": "Done!",
+                "result": res,
+                "_finished_at": time.time(),
+            }
+        )
     except Exception as e:
-        task.update({"status": "error", "error": str(e), "message": "Failed: " + str(e)})
+        task.update(
+            {
+                "status": "error",
+                "error": str(e),
+                "message": "Failed: " + str(e),
+                "_finished_at": time.time(),
+            }
+        )
+    finally:
+        _cleanup_stale_tasks()
 
 
 # ---------------------------------------------------------------------------
 # Overlay preview worker thread
 # ---------------------------------------------------------------------------
+
 
 def _run_preview_worker(token: str, kwargs: dict, job_id: str, structure_csv):
     from scripts.overlay_render import render_overlay
@@ -652,36 +723,51 @@ def _run_preview_worker(token: str, kwargs: dict, job_id: str, structure_csv):
         if structure_csv is not None:
             _last_preview_structure_csv[job_id] = str(structure_csv)
         out_png = kwargs.get("out_png") or kwargs.get("out")
-        task.update({
-            "status": "done",
-            "progress": 100,
-            "message": "Done!",
-            "result": {
-                "ok": True,
-                "preview": str(out_png) if out_png else "",
-                "diagnostic": diagnostic,
-                "jobId": job_id,
-            },
-        })
+        task.update(
+            {
+                "status": "done",
+                "progress": 100,
+                "message": "Done!",
+                "_finished_at": time.time(),
+                "result": {
+                    "ok": True,
+                    "preview": str(out_png) if out_png else "",
+                    "diagnostic": diagnostic,
+                    "jobId": job_id,
+                },
+            }
+        )
     except Exception as e:
-        task.update({
-            "status": "error",
-            "error": str(e),
-            "message": "Failed: " + str(e),
-            "failCase": str(e),
-        })
+        task.update(
+            {
+                "status": "error",
+                "error": str(e),
+                "message": "Failed: " + str(e),
+                "failCase": str(e),
+                "_finished_at": time.time(),
+            }
+        )
+    finally:
+        _cleanup_stale_tasks()
 
 
 def _active_reg_cfg() -> dict:
-    """Return the registration section of the active config, or {} if unavailable."""
+    """Return the registration section of the active config, or {} if unavailable.
+
+    Priority order:
+      1. Last config used by run_pipeline (stored in run_state["config_path"])
+      2. run_config.template.json fallback
+    """
     try:
-        cfg_candidates = [
-            PROJECT_ROOT / "configs" / "run_config_35.json",
-            PROJECT_ROOT / "configs" / "run_config.template.json",
-        ]
+        import json as _json
+
+        cfg_candidates = []
+        active = run_state.get("config_path")
+        if active:
+            cfg_candidates.append(Path(active))
+        cfg_candidates.append(PROJECT_ROOT / "configs" / "run_config.template.json")
         for p in cfg_candidates:
             if p.exists():
-                import json as _json
                 data = _json.loads(p.read_text(encoding="utf-8-sig"))
                 return data.get("registration", {})
     except Exception:

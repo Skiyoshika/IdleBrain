@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from PIL import Image
 
-from scripts.atlas_autopick import autopick_best_z
-from scripts.overlay_render import render_overlay
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.paths import bootstrap_sys_path
+
+PROJECT_ROOT = bootstrap_sys_path()
+
+from scripts.atlas_autopick import autopick_best_z  # noqa: E402
+from scripts.overlay_render import render_overlay  # noqa: E402
 
 
 def _next_test_dir(outputs_root: Path) -> Path:
@@ -93,19 +99,21 @@ def main() -> None:
     )
     ap.add_argument(
         "--annotation",
-        default=str((Path(__file__).resolve().parent.parent / "annotation_25.nii.gz")),
+        default=str(Path(__file__).resolve().parent.parent / "annotation_25.nii.gz"),
         help="Path to annotation_25.nii.gz",
     )
     ap.add_argument(
         "--outputs-root",
-        default=str((Path(__file__).resolve().parent.parent / "outputs")),
+        default=str(Path(__file__).resolve().parent.parent / "outputs"),
         help="Outputs root directory",
     )
     ap.add_argument("--pixel-size-um", type=float, default=0.65)
     ap.add_argument("--z-step", type=int, default=1)
     ap.add_argument("--slicing-plane", default="coronal")
     ap.add_argument("--major-top-k", type=int, default=28)
-    ap.add_argument("--fit-mode", default="cover", choices=["contain", "cover", "width-lock", "height-lock"])
+    ap.add_argument(
+        "--fit-mode", default="cover", choices=["contain", "cover", "width-lock", "height-lock"]
+    )
     ap.add_argument("--edge-smooth-iter", type=int, default=1)
     ap.add_argument(
         "--tuned-params-json",
@@ -123,7 +131,9 @@ def main() -> None:
     tuned_json = Path(args.tuned_params_json) if str(args.tuned_params_json).strip() else None
     warp_params, tuned_fit_mode, tuned_edge_smooth = _load_tuned_params(tuned_json)
     fit_mode = str(tuned_fit_mode or args.fit_mode)
-    edge_smooth_iter = int(tuned_edge_smooth if tuned_edge_smooth is not None else args.edge_smooth_iter)
+    edge_smooth_iter = int(
+        tuned_edge_smooth if tuned_edge_smooth is not None else args.edge_smooth_iter
+    )
 
     summary: dict = {
         "output_dir": str(out_dir),

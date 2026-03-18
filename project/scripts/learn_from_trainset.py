@@ -2,18 +2,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from tifffile import imread, imwrite
 from skimage import morphology
 from skimage.segmentation import find_boundaries
 from skimage.transform import resize
+from tifffile import imread, imwrite
 
-from scripts.atlas_autopick import autopick_best_z
-from scripts.overlay_render import render_overlay
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.paths import bootstrap_sys_path
+
+PROJECT_ROOT = bootstrap_sys_path()
+
+from scripts.atlas_autopick import autopick_best_z  # noqa: E402
+from scripts.overlay_render import render_overlay  # noqa: E402
 
 
 def _dice(a: np.ndarray, b: np.ndarray) -> float:
@@ -49,7 +55,20 @@ def _match_shape_bool(a: np.ndarray, target_shape: tuple[int, int]) -> np.ndarra
         preserve_range=True,
         anti_aliasing=False,
     )
-    return (arr > 0.5)
+    return arr > 0.5
+
+
+def _match_shape_label(a: np.ndarray, target_shape: tuple[int, int]) -> np.ndarray:
+    if tuple(a.shape) == tuple(target_shape):
+        return a.astype(np.int32)
+    arr = resize(
+        a.astype(np.float32),
+        target_shape,
+        order=0,
+        preserve_range=True,
+        anti_aliasing=False,
+    )
+    return np.rint(arr).astype(np.int32)
 
 
 def _safe_roll_mask(mask: np.ndarray, dy: int, dx: int) -> np.ndarray:
@@ -85,7 +104,7 @@ def _extract_show_boundary_mask(rgb: np.ndarray) -> np.ndarray:
     g = arr[..., 1]
     b = arr[..., 2]
     cyan = (g > 90) & (b > 100) & (r < 120) & (((g + b) // 2 - r) > 28)
-    bright = (np.maximum(np.maximum(r, g), b) > 155)
+    bright = np.maximum(np.maximum(r, g), b) > 155
     sat = (np.maximum(np.maximum(r, g), b) - np.minimum(np.minimum(r, g), b)) > 15
     color_lines = cyan & bright & sat
     thin = morphology.opening(color_lines.astype(np.uint8), morphology.disk(1)).astype(bool)
@@ -96,7 +115,7 @@ def _label_boundary_mask(label: np.ndarray) -> np.ndarray:
     lbl = label.astype(np.int32)
     outer = find_boundaries(lbl > 0, mode="outer", connectivity=2)
     inner = find_boundaries(lbl, mode="inner", connectivity=2)
-    bd = (outer | inner)
+    bd = outer | inner
     bd = morphology.dilation(bd.astype(np.uint8), morphology.disk(1)).astype(bool)
     return bd
 
@@ -106,9 +125,31 @@ def _pair_ids(train_dir: Path) -> list[str]:
     for p in sorted(train_dir.glob("*_Ori.png")):
         sid = p.name.replace("_Ori.png", "")
         show = train_dir / f"{sid}_Show.png"
-        if show.exists():
+        label = train_dir / f"{sid}_Label.tif"
+        if show.exists() or label.exists():
             out.append(sid)
     return out
+
+
+def _load_target_for_sample(train_dir: Path, sid: str) -> dict:
+    label_tif = train_dir / f"{sid}_Label.tif"
+    if label_tif.exists():
+        lbl = imread(str(label_tif))
+        lbl = np.asarray(lbl)
+        while lbl.ndim > 2:
+            lbl = lbl[..., 0]
+        return {"target_type": "label", "label": lbl.astype(np.int32), "path": str(label_tif)}
+
+    show_png = train_dir / f"{sid}_Show.png"
+    if show_png.exists():
+        show_arr = np.array(Image.open(show_png).convert("RGB"))
+        return {
+            "target_type": "show_boundary",
+            "mask": _extract_show_boundary_mask(show_arr),
+            "path": str(show_png),
+        }
+
+    raise FileNotFoundError(f"no target found for sample {sid} in {train_dir}")
 
 
 def _png_to_tif(png_path: Path, tif_path: Path) -> None:
@@ -175,10 +216,21 @@ def _default_profiles() -> dict[str, dict]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Tune registration params from train_data_set Ori/Show pairs")
-    ap.add_argument("--train-dir", default=str(Path(__file__).resolve().parent.parent / "train_data_set"))
-    ap.add_argument("--annotation", default=str(Path(__file__).resolve().parent.parent / "annotation_25.nii.gz"))
-    ap.add_argument("--out-json", default=str(Path(__file__).resolve().parent.parent / "outputs" / "trainset_tuned_params.json"))
+    ap = argparse.ArgumentParser(
+        description="Tune registration params from train_data_set Ori/Label pairs"
+    )
+    ap.add_argument(
+        "--train-dir", default=str(Path(__file__).resolve().parent.parent / "train_data_set")
+    )
+    ap.add_argument(
+        "--annotation", default=str(Path(__file__).resolve().parent.parent / "annotation_25.nii.gz")
+    )
+    ap.add_argument(
+        "--out-json",
+        default=str(
+            Path(__file__).resolve().parent.parent / "outputs" / "trainset_tuned_params.json"
+        ),
+    )
     ap.add_argument("--pixel-size-um", type=float, default=0.65)
     ap.add_argument("--major-top-k", type=int, default=48)
     ap.add_argument("--fit-modes", default="cover,contain", help="Comma-separated fit modes")
@@ -199,7 +251,9 @@ def main() -> None:
 
     ids = _pair_ids(train_dir)
     if not ids:
-        raise RuntimeError(f"no *_Ori.png/*_Show.png pairs found in {train_dir}")
+        raise RuntimeError(
+            f"no *_Ori.png with *_Label.tif or *_Show.png pairs found in {train_dir}"
+        )
     if int(args.sample_limit) > 0:
         ids = ids[: int(args.sample_limit)]
 
@@ -235,7 +289,6 @@ def main() -> None:
 
     for sid in ids:
         ori_png = train_dir / f"{sid}_Ori.png"
-        show_png = train_dir / f"{sid}_Show.png"
         real_tif = work_dir / f"{sid}_ori_gray.tif"
         label_tif = work_dir / f"{sid}_auto_label.tif"
         _png_to_tif(ori_png, real_tif)
@@ -250,8 +303,8 @@ def main() -> None:
             roi_mode="auto",
         )
 
-        show_arr = np.array(Image.open(show_png).convert("RGB"))
-        tgt_mask_raw = _extract_show_boundary_mask(show_arr)
+        target_info = _load_target_for_sample(train_dir, sid)
+        target_type = str(target_info["target_type"])
 
         per_cfg: dict[str, float] = {}
         for cfg in cfgs:
@@ -273,13 +326,26 @@ def main() -> None:
                 warp_params=cfg.warp_params,
             )
             warped = imread(str(warped_tif)).astype(np.int32)
-            pred_mask = _label_boundary_mask(warped)
-            tgt_mask = _align_target_to_pred(tgt_mask_raw, pred_mask)
-
-            d = _dice(pred_mask, tgt_mask)
-            f1 = _boundary_f1(pred_mask, tgt_mask, tol_px=2)
-            # emphasize boundary overlap while keeping area agreement
-            s = float(0.72 * f1 + 0.28 * d)
+            if target_type == "label":
+                tgt_label = _match_shape_label(np.asarray(target_info["label"]), warped.shape)
+                pred_boundary = _label_boundary_mask(warped)
+                tgt_boundary = _label_boundary_mask(tgt_label)
+                pred_outer = warped > 0
+                tgt_outer = tgt_label > 0
+                boundary_f1 = _boundary_f1(pred_boundary, tgt_boundary, tol_px=2)
+                mask_dice = _dice(pred_outer, tgt_outer)
+                overlap = pred_outer & tgt_outer
+                if np.any(overlap):
+                    label_agreement = float(np.mean(warped[overlap] == tgt_label[overlap]))
+                else:
+                    label_agreement = 0.0
+                s = float(0.60 * boundary_f1 + 0.25 * mask_dice + 0.15 * label_agreement)
+            else:
+                pred_mask = _label_boundary_mask(warped)
+                tgt_mask = _align_target_to_pred(np.asarray(target_info["mask"]), pred_mask)
+                d = _dice(pred_mask, tgt_mask)
+                f1 = _boundary_f1(pred_mask, tgt_mask, tol_px=2)
+                s = float(0.72 * f1 + 0.28 * d)
             per_cfg[k] = s
             score_sum[k] += s
             score_cnt[k] += 1
@@ -288,6 +354,7 @@ def main() -> None:
         best_cfg = next(c for c in cfgs if c.key() == best_k)
         per_sample[sid] = {
             "autopick": auto_meta,
+            "target": {"type": target_type, "path": str(target_info["path"])},
             "scores": per_cfg,
             "best": {
                 "key": best_k,
@@ -298,10 +365,7 @@ def main() -> None:
             },
         }
 
-    mean_scores = {
-        k: (score_sum[k] / max(score_cnt[k], 1))
-        for k in score_sum
-    }
+    mean_scores = {k: (score_sum[k] / max(score_cnt[k], 1)) for k in score_sum}
     best_key, best_score = max(mean_scores.items(), key=lambda x: x[1])
     best_cfg = next(c for c in cfgs if c.key() == best_key)
 
@@ -319,7 +383,7 @@ def main() -> None:
         "fit_modes": fit_modes,
         "smooth_values": smooth_values,
         "profile_names": profile_names,
-        "metric": "0.72*boundary_f1(tol=2) + 0.28*dice",
+        "metric": "label: 0.60*boundary_f1(tol=2) + 0.25*outer_mask_dice + 0.15*label_agreement; fallback_show: 0.72*boundary_f1(tol=2) + 0.28*dice",
         "mean_scores": mean_scores,
         "best": {"key": best_key, "score": float(best_score), "params": tuned},
         "profiles": profiles,

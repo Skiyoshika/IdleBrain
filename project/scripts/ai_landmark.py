@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from tifffile import imread
+from scripts.slice_select import select_label_slice_2d, select_real_slice_2d
 from skimage.feature import corner_harris, corner_peaks
-from skimage.metrics import structural_similarity as ssim
-from skimage.measure import ransac
-from skimage.transform import AffineTransform
 from skimage.filters import sobel
-from scripts.slice_select import select_real_slice_2d, select_label_slice_2d
+from skimage.measure import ransac
+from skimage.metrics import structural_similarity as ssim
+from skimage.transform import AffineTransform
+from tifffile import imread
 
 
 def detect_landmarks(img: np.ndarray, max_points: int = 30, min_distance: int = 12) -> np.ndarray:
@@ -48,7 +49,14 @@ def score_alignment_edges(a: np.ndarray, b: np.ndarray) -> float:
     return float(ssim(ea, eb, data_range=float(max(np.ptp(ea), np.ptp(eb), 1.0))))
 
 
-def propose_landmarks(real_path: Path, atlas_path: Path, out_csv: Path, max_points: int = 30, min_distance: int = 12, ransac_residual: float = 8.0) -> dict:
+def propose_landmarks(
+    real_path: Path,
+    atlas_path: Path,
+    out_csv: Path,
+    max_points: int = 30,
+    min_distance: int = 12,
+    ransac_residual: float = 8.0,
+) -> dict:
     real = imread(str(real_path))
     atl = imread(str(atlas_path))
     real, _ = select_real_slice_2d(real, source_path=real_path)
@@ -78,12 +86,14 @@ def propose_landmarks(real_path: Path, atlas_path: Path, out_csv: Path, max_poin
     ap_f = ap[inliers]
     nf = len(rp_f)
 
-    df = pd.DataFrame({
-        "real_x": rp_f[:, 0] if nf else [],
-        "real_y": rp_f[:, 1] if nf else [],
-        "atlas_x": ap_f[:, 0] if nf else [],
-        "atlas_y": ap_f[:, 1] if nf else [],
-    })
+    df = pd.DataFrame(
+        {
+            "real_x": rp_f[:, 0] if nf else [],
+            "real_y": rp_f[:, 1] if nf else [],
+            "atlas_x": ap_f[:, 0] if nf else [],
+            "atlas_y": ap_f[:, 1] if nf else [],
+        }
+    )
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_csv, index=False)
 
@@ -91,6 +101,10 @@ def propose_landmarks(real_path: Path, atlas_path: Path, out_csv: Path, max_poin
         "landmark_pairs": int(nf),
         "raw_pairs": int(n),
         "score": score_alignment(real, atl),
-        "params": {"max_points": max_points, "min_distance": min_distance, "ransac_residual": ransac_residual},
+        "params": {
+            "max_points": max_points,
+            "min_distance": min_distance,
+            "ransac_residual": ransac_residual,
+        },
         "csv": str(out_csv),
     }

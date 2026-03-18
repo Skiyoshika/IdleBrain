@@ -5,16 +5,18 @@ Usage:
     cd project
     python scripts/make_demo_panel.py [--out outputs/demo_panel.png] [--n 9]
 """
+
 from __future__ import annotations
-import argparse, glob, sys
+
+import argparse
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
 import tifffile
-
+from PIL import Image, ImageDraw, ImageFont
 
 # ── annotated single-slice helper ────────────────────────────────────────────
+
 
 def make_annotated_slice(
     overlay_png: Path,
@@ -37,8 +39,8 @@ def make_annotated_slice(
     # --- load structure tree for region names ---
     try:
         df = pd.read_csv(str(structure_csv))
-        id2name = dict(zip(df["id"].astype(int), df["name"].fillna("?")))
-        id2acro = dict(zip(df["id"].astype(int), df["acronym"].fillna("?")))
+        id2name = dict(zip(df["id"].astype(int), df["name"].fillna("?"), strict=False))
+        id2acro = dict(zip(df["id"].astype(int), df["acronym"].fillna("?"), strict=False))
     except Exception:
         id2name = {}
         id2acro = {}
@@ -59,8 +61,8 @@ def make_annotated_slice(
     r1 = min(ov_arr.shape[0] - 1, np.where(rows)[0][-1] + 20)
     c0 = max(0, np.where(cols)[0][0] - 20)
     c1 = min(ov_arr.shape[1] - 1, np.where(cols)[0][-1] + 20)
-    vib_crop = vib[r0:r1+1, c0:c1+1]
-    lbl_crop = lbl_arr[r0:r1+1, c0:c1+1]
+    vib_crop = vib[r0 : r1 + 1, c0 : c1 + 1]
+    lbl_crop = lbl_arr[r0 : r1 + 1, c0 : c1 + 1]
 
     # --- load raw image if available ---
     if raw_tif and Path(str(raw_tif)).exists():
@@ -70,7 +72,7 @@ def make_annotated_slice(
                 raw = raw[..., 0]
             p1, p99 = np.percentile(raw[raw > 0], [1, 99]) if raw.max() > 0 else (0, 1)
             raw_norm = np.clip((raw - p1) / (p99 - p1 + 1e-6) * 255, 0, 255).astype(np.uint8)
-            raw_rgb = np.stack([raw_norm] * 3, axis=-1)[r0:r1+1, c0:c1+1]
+            raw_rgb = np.stack([raw_norm] * 3, axis=-1)[r0 : r1 + 1, c0 : c1 + 1]
         except Exception:
             raw_rgb = None
     else:
@@ -79,13 +81,17 @@ def make_annotated_slice(
     H, W = vib_crop.shape[:2]
     TARGET_H = 560  # normalize height
     scale = TARGET_H / H
+
     def _resize(arr):
         img = Image.fromarray(arr)
         return np.array(img.resize((int(W * scale), TARGET_H), Image.LANCZOS))
 
     vib_r = _resize(vib_crop)
-    lbl_r = np.array(Image.fromarray(lbl_crop.astype(np.float32)).resize(
-        (int(W * scale), TARGET_H), Image.NEAREST)).astype(np.int32)
+    lbl_r = np.array(
+        Image.fromarray(lbl_crop.astype(np.float32)).resize(
+            (int(W * scale), TARGET_H), Image.NEAREST
+        )
+    ).astype(np.int32)
 
     # --- find top regions by area ---
     ids, counts = np.unique(lbl_r[lbl_r > 0], return_counts=True)
@@ -93,18 +99,25 @@ def make_annotated_slice(
 
     # --- draw region labels on the vibrant overlay ---
     PALETTE = [
-        (255,80,80),(255,165,50),(255,220,50),(80,200,80),(50,200,200),
-        (80,130,255),(180,80,255),(255,100,200),(255,140,80),(120,220,120),
+        (255, 80, 80),
+        (255, 165, 50),
+        (255, 220, 50),
+        (80, 200, 80),
+        (50, 200, 200),
+        (80, 130, 255),
+        (180, 80, 255),
+        (255, 100, 200),
+        (255, 140, 80),
+        (120, 220, 120),
     ]
     result_img = Image.fromarray(vib_r)
     draw = ImageDraw.Draw(result_img)
 
     try:
         font_sm = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 12)
-        font_lg = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 14)
+        ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 14)
     except Exception:
         font_sm = ImageFont.load_default()
-        font_lg = font_sm
 
     legend_entries = []  # (color, acro, full_name) for legend panel
     for rank, si in enumerate(sorted_idx):
@@ -119,11 +132,11 @@ def make_annotated_slice(
         legend_entries.append((color, acro, name))
         # Draw small circle at centroid
         r = 4
-        draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=color, outline=(255,255,255))
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color, outline=(255, 255, 255))
         # Draw acronym label with drop-shadow
         tx, ty = cx + 7, cy - 8
-        for dx, dy in [(-1,-1),(1,-1),(-1,1),(1,1)]:
-            draw.text((tx+dx, ty+dy), acro, fill=(0,0,0), font=font_sm)
+        for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+            draw.text((tx + dx, ty + dy), acro, fill=(0, 0, 0), font=font_sm)
         draw.text((tx, ty), acro, fill=color, font=font_sm)
 
     annotated = np.array(result_img)
@@ -153,10 +166,14 @@ def make_annotated_slice(
     for i, (color, acro, name) in enumerate(legend_entries):
         y = LEGEND_PAD + i * LEGEND_ROW_H + 2
         # color swatch
-        leg_draw.rectangle([12, y+1, 28, y+15], fill=color)
+        leg_draw.rectangle([12, y + 1, 28, y + 15], fill=color)
         # acronym (bold) + full name
         leg_draw.text((36, y), acro, fill=color, font=font_leg_b)
-        acro_w = leg_draw.textlength(acro, font=font_leg_b) if hasattr(leg_draw, 'textlength') else len(acro)*8
+        acro_w = (
+            leg_draw.textlength(acro, font=font_leg_b)
+            if hasattr(leg_draw, "textlength")
+            else len(acro) * 8
+        )
         disp_name = name if len(name) <= 40 else name[:38] + ".."
         leg_draw.text((36 + acro_w + 8, y), f"— {disp_name}", fill=(180, 180, 180), font=font_leg)
     legend_panel = np.array(leg_img)
@@ -168,15 +185,25 @@ def make_annotated_slice(
     draw2 = ImageDraw.Draw(full)
     try:
         font_title = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 20)
-        font_sub   = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 13)
+        ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 13)
     except Exception:
-        font_title = font_sub = ImageFont.load_default()
+        font_title = ImageFont.load_default()
 
     if raw_rgb is not None:
         draw2.text((12, 14), "Raw Lightsheet", fill=(200, 200, 200), font=font_title)
-        draw2.text((raw_r.shape[1] + 14, 14), "Brainfast — Allen CCFv3 Atlas Registration", fill=(200, 200, 200), font=font_title)
+        draw2.text(
+            (raw_r.shape[1] + 14, 14),
+            "Brainfast — Allen CCFv3 Atlas Registration",
+            fill=(200, 200, 200),
+            font=font_title,
+        )
     else:
-        draw2.text((12, 14), "Brainfast — Allen CCFv3 Atlas Registration", fill=(200, 200, 200), font=font_title)
+        draw2.text(
+            (12, 14),
+            "Brainfast — Allen CCFv3 Atlas Registration",
+            fill=(200, 200, 200),
+            font=font_title,
+        )
 
     full.save(str(out_path), quality=95)
     return out_path
@@ -184,10 +211,11 @@ def make_annotated_slice(
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _crop_to_brain(img_arr: np.ndarray, pad: int = 20) -> np.ndarray:
     """Crop away dark background, keeping only the brain region + padding."""
     gray = img_arr.mean(axis=2) if img_arr.ndim == 3 else img_arr
-    mask = gray > 8          # threshold for "not black background"
+    mask = gray > 8  # threshold for "not black background"
     rows = np.any(mask, axis=1)
     cols = np.any(mask, axis=0)
     if not rows.any():
@@ -199,7 +227,7 @@ def _crop_to_brain(img_arr: np.ndarray, pad: int = 20) -> np.ndarray:
     r1 = min(H - 1, r1 + pad)
     c0 = max(0, c0 - pad)
     c1 = min(W - 1, c1 + pad)
-    return img_arr[r0:r1+1, c0:c1+1]
+    return img_arr[r0 : r1 + 1, c0 : c1 + 1]
 
 
 def _vibrant_recolor(img_arr: np.ndarray, label_arr: np.ndarray) -> np.ndarray:
@@ -210,17 +238,32 @@ def _vibrant_recolor(img_arr: np.ndarray, label_arr: np.ndarray) -> np.ndarray:
     """
     # Vivid palette (HSL-spaced, high saturation)
     PALETTE = [
-        (255,  80,  80), (255, 165,  50), (255, 220,  50), ( 80, 200,  80),
-        ( 50, 200, 200), ( 80, 130, 255), (180,  80, 255), (255, 100, 200),
-        (255, 140,  80), (120, 220, 120), ( 80, 200, 230), (160, 100, 255),
-        (220, 200,  80), (100, 200, 160), (255,  80, 140), (200, 160,  80),
-        ( 80, 180, 255), (255, 120,  50), (150, 255, 150), (200,  80, 255),
+        (255, 80, 80),
+        (255, 165, 50),
+        (255, 220, 50),
+        (80, 200, 80),
+        (50, 200, 200),
+        (80, 130, 255),
+        (180, 80, 255),
+        (255, 100, 200),
+        (255, 140, 80),
+        (120, 220, 120),
+        (80, 200, 230),
+        (160, 100, 255),
+        (220, 200, 80),
+        (100, 200, 160),
+        (255, 80, 140),
+        (200, 160, 80),
+        (80, 180, 255),
+        (255, 120, 50),
+        (150, 255, 150),
+        (200, 80, 255),
     ]
 
     # Convert original image to float grayscale (brain texture)
     gray = img_arr.mean(axis=2).astype(np.float32) / 255.0
     # Gamma < 1 brightens dim cleared-tissue images so texture is visible through color.
-    gray_bright = np.clip(gray ** 0.55, 0.0, 1.0)
+    gray_bright = np.clip(gray**0.55, 0.0, 1.0)
     out = np.zeros((*img_arr.shape[:2], 3), dtype=np.uint8)
 
     ids = np.unique(label_arr)
@@ -239,15 +282,22 @@ def _vibrant_recolor(img_arr: np.ndarray, label_arr: np.ndarray) -> np.ndarray:
     return out
 
 
-def _add_label(draw: ImageDraw.ImageDraw, text: str, xy: tuple,
-               font, text_color=(255, 255, 255), shadow_color=(0, 0, 0)):
+def _add_label(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    xy: tuple,
+    font,
+    text_color=(255, 255, 255),
+    shadow_color=(0, 0, 0),
+):
     x, y = xy
-    for dx, dy in [(-1,-1),(1,-1),(-1,1),(1,1)]:
-        draw.text((x+dx, y+dy), text, fill=shadow_color, font=font)
+    for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+        draw.text((x + dx, y + dy), text, fill=shadow_color, font=font)
     draw.text(xy, text, fill=text_color, font=font)
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
+
 
 def _tissue_mask_from_raw(raw_tif_path: Path) -> np.ndarray | None:
     """Compute accurate tissue mask from a raw lightsheet TIF using 4-sigma corner threshold."""
@@ -256,13 +306,19 @@ def _tissue_mask_from_raw(raw_tif_path: Path) -> np.ndarray | None:
         if raw.ndim == 3:
             raw = raw[0] if raw.shape[0] < raw.shape[1] else raw[..., 0]
         b = 60
-        corners = np.concatenate([
-            raw[:b, :b].ravel(), raw[:b, -b:].ravel(),
-            raw[-b:, :b].ravel(), raw[-b:, -b:].ravel(),
-        ])
+        corners = np.concatenate(
+            [
+                raw[:b, :b].ravel(),
+                raw[:b, -b:].ravel(),
+                raw[-b:, :b].ravel(),
+                raw[-b:, -b:].ravel(),
+            ]
+        )
         thr = float(np.mean(corners) + 4.0 * np.std(corners))
         mask = raw > thr
-        from skimage import morphology as _morph, measure as _meas
+        from skimage import measure as _meas
+        from skimage import morphology as _morph
+
         mask = _morph.closing(mask, _morph.disk(20))
         labeled = _meas.label(mask)
         if labeled.max() > 0:
@@ -274,15 +330,19 @@ def _tissue_mask_from_raw(raw_tif_path: Path) -> np.ndarray | None:
         return None
 
 
-def _clip_to_tissue(img_arr: np.ndarray, tissue_mask: np.ndarray, feather_px: int = 10) -> np.ndarray:
+def _clip_to_tissue(
+    img_arr: np.ndarray, tissue_mask: np.ndarray, feather_px: int = 10
+) -> np.ndarray:
     """Clip a colourised overlay to the actual tissue boundary with a smooth feathered edge."""
     from scipy.ndimage import distance_transform_edt as _dt_edt
+
     if tissue_mask.shape != img_arr.shape[:2]:
         # Resize mask to match image
         from PIL import Image as _Im
+
         tm_img = _Im.fromarray(tissue_mask.astype(np.uint8) * 255)
         tm_img = tm_img.resize((img_arr.shape[1], img_arr.shape[0]), _Im.NEAREST)
-        tissue_mask = (np.array(tm_img) > 127)
+        tissue_mask = np.array(tm_img) > 127
     dist_in = _dt_edt(tissue_mask.astype(np.uint8)).astype(np.float32)
     alpha = np.clip(dist_in / max(feather_px, 1), 0.0, 1.0)[:, :, np.newaxis]
     return np.clip(img_arr.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
@@ -298,9 +358,11 @@ def make_panel(
     slice_dir: Path | None = None,
 ) -> Path:
     overlay_files = sorted(reg_dir.glob("slice_*_overlay.png"))
-    label_files   = sorted(reg_dir.glob("slice_*_registered_label.tif"))
+    label_files = sorted(reg_dir.glob("slice_*_registered_label.tif"))
     # Pre-sort raw slice files for tissue-mask clipping
-    raw_files: list[Path] = sorted(slice_dir.glob("*.tif")) if slice_dir and slice_dir.exists() else []
+    raw_files: list[Path] = (
+        sorted(slice_dir.glob("*.tif")) if slice_dir and slice_dir.exists() else []
+    )
 
     if not overlay_files:
         raise FileNotFoundError(f"No overlay PNGs in {reg_dir}")
@@ -321,17 +383,22 @@ def make_panel(
 
     # Font setup
     font_big, font_sm = None, None
-    for fname in ["arial.ttf", "Arial.ttf", "DejaVuSans.ttf",
-                  "C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/segoeui.ttf"]:
+    for fname in [
+        "arial.ttf",
+        "Arial.ttf",
+        "DejaVuSans.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+    ]:
         try:
             font_big = ImageFont.truetype(fname, 22)
-            font_sm  = ImageFont.truetype(fname, 14)
+            font_sm = ImageFont.truetype(fname, 14)
             break
         except Exception:
             pass
     if font_big is None:
         font_big = ImageFont.load_default()
-        font_sm  = font_big
+        font_sm = font_big
 
     draw_panel = ImageDraw.Draw(panel)
     # Title
@@ -385,7 +452,7 @@ def make_panel(
         # atlas_z = int(z_file * (-0.2)) + 330 (reversed direction, offset=330)
         z_file = 50 + slice_num * 5
         atlas_z = max(0, min(527, int(z_file * -0.2) + 330))
-        ap_mm = round(atlas_z * 0.025, 2)    # 25µm per atlas voxel → mm
+        ap_mm = round(atlas_z * 0.025, 2)  # 25µm per atlas voxel → mm
         label_txt = f"Slice {slice_num:03d}  atlas_z={atlas_z}  AP={ap_mm}mm"
         _add_label(draw_cell, label_txt, (6, thumb_size - 22), font_sm)
 

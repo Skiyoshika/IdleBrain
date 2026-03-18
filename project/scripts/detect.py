@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from tifffile import imread
 from skimage import measure
 from skimage.feature import blob_log, peak_local_max
+from tifffile import imread
 
 try:
     from scipy.spatial import cKDTree
@@ -15,7 +15,7 @@ except Exception:  # pragma: no cover - optional dependency fallback
     cKDTree = None
 
 
-_CELLPOSE_MODEL_CACHE: dict[Tuple[str, bool], Any] = {}
+_CELLPOSE_MODEL_CACHE: dict[tuple[str, bool], Any] = {}
 
 
 def _read_gray(slice_path: Path) -> np.ndarray:
@@ -47,7 +47,7 @@ def _resolve_model_type(name: str) -> str:
     return "cyto3"
 
 
-def _pixel_size_um_from_cfg(cfg: Dict[str, Any]) -> float | None:
+def _pixel_size_um_from_cfg(cfg: dict[str, Any]) -> float | None:
     raw = cfg.get("input", {}).get("pixel_size_um_xy", None)
     if raw in (None, "", "TODO"):
         return None
@@ -58,7 +58,7 @@ def _pixel_size_um_from_cfg(cfg: Dict[str, Any]) -> float | None:
         return None
 
 
-def _diameter_px(det_cfg: Dict[str, Any], cfg: Dict[str, Any]) -> float | None:
+def _diameter_px(det_cfg: dict[str, Any], cfg: dict[str, Any]) -> float | None:
     raw_px = det_cfg.get("cellpose_diameter_px", None)
     if raw_px not in (None, "", 0):
         try:
@@ -82,7 +82,7 @@ def _diameter_px(det_cfg: Dict[str, Any], cfg: Dict[str, Any]) -> float | None:
     return float(d_px) if d_px > 0 else None
 
 
-def _use_gpu(cfg: Dict[str, Any], det_cfg: Dict[str, Any]) -> bool:
+def _use_gpu(cfg: dict[str, Any], det_cfg: dict[str, Any]) -> bool:
     forced = det_cfg.get("cellpose_gpu", None)
     if forced is not None:
         return bool(forced)
@@ -254,7 +254,7 @@ def detect_cells_cellpose(
     return _masks_to_centroids(masks, detector=f"cellpose_{model_type}")
 
 
-def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: Dict[str, Any]) -> pd.DataFrame:
+def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: dict[str, Any]) -> pd.DataFrame:
     det_cfg = cfg.get("detection", {})
     model_type = _resolve_model_type(model_name)
     d_px = _diameter_px(det_cfg, cfg)
@@ -276,7 +276,7 @@ def _run_cellpose_by_name(slice_path: Path, model_name: str, cfg: Dict[str, Any]
     )
 
 
-def detect_cells(slice_path: Path, cfg: Dict[str, Any]) -> pd.DataFrame:
+def detect_cells(slice_path: Path, cfg: dict[str, Any]) -> pd.DataFrame:
     det_cfg = cfg.get("detection", {})
     primary = str(det_cfg.get("primary_model", "cellpose_cyto2"))
     secondary = str(det_cfg.get("secondary_model", "cellpose_nuclei"))

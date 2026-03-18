@@ -41,13 +41,16 @@
     "display_gamma": 0.65,
     "ap_method": "formula",
     "deepslice_max_deviation": 25,
-    "enable_silhouette_conform": false,
+    "enable_silhouette_conform": true,
+    "contour_max_disp_ratio": 0.20,
+    "contour_tps_smooth": 2.0,
+    "contour_n_pts": 96,
     "enable_sitk_ref_refine": true,
     "sitk_max_dim": 512,
     "sitk_mi_bins": 32,
     "sitk_max_iter": 60,
     "sitk_mesh_size": 8,
-    "sitk_max_disp_frac": 0.12
+    "sitk_max_disp_frac": 0.10
   },
   "detection": {
     "primary_model": "fallback",

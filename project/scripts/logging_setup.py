@@ -20,16 +20,16 @@ Usage in sub-modules::
 All ``idlebrain.*`` child loggers inherit the root idlebrain handler — no
 per-module setup required.
 """
+
 from __future__ import annotations
 
 import logging
 import logging.handlers
 from pathlib import Path
 
-
 _ROOT_LOGGER_NAME = "idlebrain"
 _LOG_FILE_NAME = "idlebrain.log"
-_MAX_LOG_BYTES = 5_000_000   # 5 MB
+_MAX_LOG_BYTES = 5_000_000  # 5 MB
 _BACKUP_COUNT = 3
 
 
@@ -69,9 +69,7 @@ def configure_logging(
     # ── Console handler ───────────────────────────────────────────────────────
     ch = logging.StreamHandler()
     ch.setLevel(level)
-    ch.setFormatter(
-        logging.Formatter("[%(levelname)s] %(name)s: %(message)s")
-    )
+    ch.setFormatter(logging.Formatter("[%(levelname)s] %(name)s: %(message)s"))
     logger.addHandler(ch)
 
     # ── Rotating file handler ─────────────────────────────────────────────────

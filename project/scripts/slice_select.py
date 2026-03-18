@@ -7,12 +7,7 @@ from skimage.filters import sobel
 
 
 def _looks_like_rgb(img: np.ndarray) -> bool:
-    return (
-        img.ndim == 3
-        and img.shape[-1] in (3, 4)
-        and img.shape[0] > 16
-        and img.shape[1] > 16
-    )
+    return img.ndim == 3 and img.shape[-1] in (3, 4) and img.shape[0] > 16 and img.shape[1] > 16
 
 
 def _reduce_to_3d(img: np.ndarray) -> np.ndarray:

@@ -7,7 +7,6 @@ from pathlib import Path
 
 from config_validation import load_config, validate_runtime_config
 
-
 REQUIRED_MODULES = (
     "flask",
     "numpy",
@@ -44,7 +43,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate the Brainfast runtime environment")
     parser.add_argument(
         "--config",
-        default=str(Path(__file__).resolve().parent.parent / "configs" / "run_config.template.json"),
+        default=str(
+            Path(__file__).resolve().parent.parent / "configs" / "run_config.template.json"
+        ),
         help="Config file to validate",
     )
     parser.add_argument(

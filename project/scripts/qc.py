@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 from tifffile import imread
 
 
@@ -15,7 +15,9 @@ def export_slice_qc(cells_mapped_csv: Path, out_csv: Path) -> pd.DataFrame:
     return grp
 
 
-def export_overlays(sample_input_dir: Path, cells_csv: Path, out_dir: Path, max_images: int = 5) -> None:
+def export_overlays(
+    sample_input_dir: Path, cells_csv: Path, out_dir: Path, max_images: int = 5
+) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     cells = pd.read_csv(cells_csv)
     files = sorted(sample_input_dir.glob("*.tif"))[:max_images]

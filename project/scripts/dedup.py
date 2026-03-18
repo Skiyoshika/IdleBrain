@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Set
 
-import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
 
@@ -34,18 +32,20 @@ def apply_dedup_kdtree(
     and |slice_id_i - slice_id_j| <= neighbor_slices.
     """
     if cells.empty:
-        stats = pd.DataFrame([
-            {
-                "before_count": 0,
-                "after_count": 0,
-                "merged_count": 0,
-                "merge_ratio": 0.0,
-                "method": "kdtree_anisotropic",
-                "neighbor_slices": neighbor_slices,
-                "r_xy_um": r_xy_um,
-                "r_z_um": slice_spacing_um * 0.5,
-            }
-        ])
+        stats = pd.DataFrame(
+            [
+                {
+                    "before_count": 0,
+                    "after_count": 0,
+                    "merged_count": 0,
+                    "merge_ratio": 0.0,
+                    "method": "kdtree_anisotropic",
+                    "neighbor_slices": neighbor_slices,
+                    "r_xy_um": r_xy_um,
+                    "r_z_um": slice_spacing_um * 0.5,
+                }
+            ]
+        )
         return cells.copy(), stats
 
     r_z_um = slice_spacing_um * 0.5
@@ -61,8 +61,8 @@ def apply_dedup_kdtree(
     scaled[:, 2] /= max(r_z_um, 1e-6)
     tree = cKDTree(scaled)
 
-    removed: Set[int] = set()
-    keep_indices: List[int] = []
+    removed: set[int] = set()
+    keep_indices: list[int] = []
 
     for idx in order:
         if idx in removed:
@@ -77,21 +77,25 @@ def apply_dedup_kdtree(
             if abs(int(df.loc[nidx, "slice_id"]) - base_slice) <= neighbor_slices:
                 removed.add(nidx)
 
-    deduped = df.loc[sorted(keep_indices)].sort_values(["slice_id", "cell_id"]).reset_index(drop=True)
+    deduped = (
+        df.loc[sorted(keep_indices)].sort_values(["slice_id", "cell_id"]).reset_index(drop=True)
+    )
     before = len(df)
     after = len(deduped)
-    stats = pd.DataFrame([
-        {
-            "before_count": before,
-            "after_count": after,
-            "merged_count": before - after,
-            "merge_ratio": (before - after) / before if before else 0.0,
-            "method": "kdtree_anisotropic",
-            "neighbor_slices": neighbor_slices,
-            "r_xy_um": r_xy_um,
-            "r_z_um": r_z_um,
-        }
-    ])
+    stats = pd.DataFrame(
+        [
+            {
+                "before_count": before,
+                "after_count": after,
+                "merged_count": before - after,
+                "merge_ratio": (before - after) / before if before else 0.0,
+                "method": "kdtree_anisotropic",
+                "neighbor_slices": neighbor_slices,
+                "r_xy_um": r_xy_um,
+                "r_z_um": r_z_um,
+            }
+        ]
+    )
     return deduped, stats
 
 

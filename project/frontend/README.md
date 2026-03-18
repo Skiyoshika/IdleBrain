@@ -10,6 +10,13 @@ python server.py
 
 Open: `http://127.0.0.1:8787`
 
+Validate the runtime first if needed:
+
+```bash
+cd ..
+python scripts/check_env.py --config configs/run_config.template.json
+```
+
 ### Workflow Modes
 - **One-Click Mode (recommended)**
   - Source TIFF -> Single-layer or Whole-brain -> Start
@@ -35,6 +42,11 @@ cd frontend
 build_desktop.bat
 ```
 Then run `dist/IdleBrainUI.exe`.
+
+### Fallback trial launcher
+If PyInstaller is blocked by Windows Defender, double-click:
+
+`StartIdleBrainTrial.bat`
 
 ## 中文
 运行前端与后端桥接服务：
@@ -64,6 +76,11 @@ python server.py
 ### 导出
 - 可快速导出当前预览为：`png`、`tif`、`jpg`、`bmp`
 - 也可通过画布导出带标注的图像
+
+### Defender 阻止 EXE 时的试用方式
+如果 PyInstaller 打包被 Windows Defender 拦截，可以直接双击：
+
+`StartIdleBrainTrial.bat`
 
 ---
 See `../README.md` and `../project/README.md` for full architecture and pipeline docs.
