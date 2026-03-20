@@ -45,6 +45,7 @@ from project.frontend.blueprints.api_browse import bp as browse_bp
 from project.frontend.blueprints.api_projects import bp as projects_bp
 from project.frontend.blueprints.api_batch import bp as batch_bp
 from project.frontend.blueprints.api_compare import bp as compare_bp
+from project.frontend.blueprints.api_docs import bp as docs_bp
 
 
 def create_app() -> Flask:
@@ -60,6 +61,7 @@ def create_app() -> Flask:
     app.register_blueprint(projects_bp)
     app.register_blueprint(batch_bp)
     app.register_blueprint(compare_bp)
+    app.register_blueprint(docs_bp)
     return app
 
 

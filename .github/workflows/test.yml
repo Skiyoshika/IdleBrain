@@ -5,6 +5,7 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main]
+  workflow_dispatch:   # allow manual trigger from GitHub UI (e.g. to run integration tests)
 
 jobs:
   # ── Fast unit tests (no atlas file required) ──────────────────────────────
@@ -29,7 +30,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          python -m pytest project/tests/unit/ -v --tb=short --cov=project/scripts --cov-report=term-missing
+          python -m pytest project/tests/unit/ -v --tb=short --cov=project/scripts --cov-report=term-missing --cov-fail-under=20
 
   # ── Lint ──────────────────────────────────────────────────────────────────
   lint:
@@ -54,13 +55,30 @@ jobs:
         run: ruff format --check project/scripts/ project/frontend/blueprints/ project/frontend/server_context.py
 
   # ── Integration tests (self-hosted, has atlas file) ───────────────────────
-  # Uncomment when self-hosted runner with annotation_25.nii.gz is available:
-  # integration:
-  #   name: Integration tests
-  #   runs-on: self-hosted
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Run integration tests
-  #       run: |
-  #         cd project
-  #         python -m pytest tests/integration/ -v --tb=short
+  # Requires a self-hosted runner registered with the label "brainfast"
+  # that has annotation_25.nii.gz on disk.
+  #
+  # To register a runner:
+  #   GitHub → Settings → Actions → Runners → New self-hosted runner
+  #   Run the installer, add label: brainfast
+  #
+  # Once registered, remove the 'if: false' guard to activate.
+  integration:
+    name: Integration tests (self-hosted)
+    runs-on: [self-hosted, brainfast]
+    if: false   # ← remove this line after registering the self-hosted runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[advanced]" pytest pytest-cov
+
+      - name: Run integration tests
+        run: |
+          python -m pytest project/tests/integration/ -v --tb=short

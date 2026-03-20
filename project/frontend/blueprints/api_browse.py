@@ -1,14 +1,35 @@
-"""api_browse.py — Browse folder/file via tkinter dialog."""
+"""api_browse.py — Browse folder/file via tkinter dialog.
+
+In headless environments (e.g. Docker/Linux servers), set the environment
+variable BRAINFAST_HEADLESS=1 to return a friendly error instead of crashing.
+"""
 
 from __future__ import annotations
 
+import os
+
 from flask import Blueprint, jsonify, request
 
+from project.frontend.api_errors import (
+    ERR_INTERNAL,
+)
+
 bp = Blueprint("api_browse", __name__, url_prefix="/api")
+
+_HEADLESS = os.environ.get("BRAINFAST_HEADLESS", "").strip() not in ("", "0", "false", "no")
+
+_HEADLESS_MSG = (
+    "File browser is not available in headless mode (BRAINFAST_HEADLESS=1). "
+    "Enter the path manually."
+)
 
 
 @bp.post("/browse/folder")
 def browse_folder():
+    if _HEADLESS:
+        return jsonify(
+            {"ok": False, "error": _HEADLESS_MSG, "headless": True, "error_code": ERR_INTERNAL}
+        ), 200
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -20,11 +41,15 @@ def browse_folder():
         root.destroy()
         return jsonify({"ok": True, "path": path or ""})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INTERNAL}), 500
 
 
 @bp.post("/browse/file")
 def browse_file():
+    if _HEADLESS:
+        return jsonify(
+            {"ok": False, "error": _HEADLESS_MSG, "headless": True, "error_code": ERR_INTERNAL}
+        ), 200
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -43,4 +68,4 @@ def browse_file():
         root.destroy()
         return jsonify({"ok": True, "path": path or ""})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INTERNAL}), 500

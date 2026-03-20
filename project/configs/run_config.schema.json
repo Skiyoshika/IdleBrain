@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "brainfast/run_config/v1",
+  "title": "Brainfast Run Config",
+  "description": "Configuration schema for a Brainfast 2D slice pipeline run.",
+  "type": "object",
+  "required": ["project", "input", "registration", "detection", "dedup", "outputs"],
+  "additionalProperties": true,
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "Experiment or sample identifier." },
+        "version": { "type": "string" }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["slice_glob", "pixel_size_um_xy", "slice_spacing_um", "channel_map"],
+      "properties": {
+        "slice_dir": { "type": "string", "description": "Override input directory (optional; can be passed at runtime)." },
+        "slice_glob": { "type": "string", "minLength": 1, "examples": ["z*.tif", "*.tif"] },
+        "sampling_mode": {
+          "type": "string",
+          "enum": ["single", "merged", "merge", "merge5", "merge_n", "native", "raw", "original"],
+          "default": "single"
+        },
+        "slice_interval_n": { "type": "integer", "minimum": 1, "default": 1 },
+        "pixel_size_um_xy": { "type": "number", "exclusiveMinimum": 0, "description": "XY pixel size in µm." },
+        "slice_spacing_um": { "type": "number", "exclusiveMinimum": 0, "description": "Distance between Z slices in µm." },
+        "bit_depth": { "type": "integer", "enum": [8, 12, 14, 16], "default": 16 },
+        "channel_map": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Map of channel name → 0-based channel index.",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "active_channel": { "type": "string", "description": "Which channel_map key to use for detection." }
+      }
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "marker": { "type": "string" },
+        "signal_type": { "type": "string", "enum": ["cyto", "nuclei", "membrane"] }
+      }
+    },
+    "compute": {
+      "type": "object",
+      "properties": {
+        "device": { "type": "string", "enum": ["cpu", "cuda", "mps"], "default": "cpu" },
+        "gpu_name": { "type": "string" },
+        "vram_gb": { "type": "number", "minimum": 0 }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string" },
+        "auto_first": { "type": "boolean", "default": true },
+        "fail_score_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "landmark_fallback": { "type": "boolean" },
+        "landmark_max_slices": { "type": "integer", "minimum": 0 },
+        "atlas_z_range": {
+          "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2
+        },
+        "atlas_z_from_filename": { "type": "boolean", "default": false },
+        "atlas_z_z_scale": { "type": "number" },
+        "atlas_z_offset": { "type": "number" },
+        "atlas_hemisphere": {
+          "type": "string",
+          "enum": ["left", "right", "right_flipped", "left_flipped", "both"],
+          "description": "Half-brain orientation. 'right_flipped' = external face on LEFT."
+        },
+        "atlas_z_refine_range": {
+          "type": "integer", "minimum": 0,
+          "description": "AP search window around initial estimate. 0 = disabled."
+        },
+        "tissue_shrink_factor": { "type": "number", "minimum": 0.1, "maximum": 2.0 },
+        "display_gamma": { "type": "number", "exclusiveMinimum": 0 },
+        "ap_method": { "type": "string", "enum": ["formula", "autopick", "deepslice"] },
+        "enable_silhouette_conform": { "type": "boolean" },
+        "contour_max_disp_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "contour_tps_smooth": { "type": "number", "minimum": 0 },
+        "contour_n_pts": { "type": "integer", "minimum": 4 },
+        "enable_sitk_ref_refine": { "type": "boolean" },
+        "sitk_max_dim": { "type": "integer", "minimum": 64 },
+        "sitk_mi_bins": { "type": "integer", "minimum": 4 },
+        "sitk_max_iter": { "type": "integer", "minimum": 1 },
+        "sitk_mesh_size": { "type": "integer", "minimum": 1 },
+        "sitk_max_disp_frac": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "detection": {
+      "type": "object",
+      "required": ["primary_model"],
+      "properties": {
+        "primary_model": {
+          "type": "string", "minLength": 1,
+          "description": "Model name: 'log', 'cellpose_cyto2', 'cellpose_nuclei', etc."
+        },
+        "secondary_model": { "type": "string" },
+        "merge_primary_secondary": { "type": "boolean", "default": false },
+        "allow_fallback": { "type": "boolean", "default": true },
+        "fallback_model": { "type": "string" },
+        "min_score": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.0 },
+        "cellpose_gpu": { "type": "boolean" },
+        "cellpose_diameter_um": { "type": "number", "exclusiveMinimum": 0 },
+        "cellpose_channels": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
+        "cellpose_flow_threshold": { "type": "number" },
+        "cellpose_cellprob_threshold": { "type": "number" },
+        "cellpose_min_size_px": { "type": "integer", "minimum": 1 },
+        "cellpose_batch_size": { "type": "integer", "minimum": 1 },
+        "within_slice_dedup_px": { "type": "number", "minimum": 0 },
+        "auto_switch_on_distortion": { "type": "boolean" },
+        "fallback_log_min_sigma": { "type": "number", "exclusiveMinimum": 0 },
+        "fallback_log_max_sigma": { "type": "number", "exclusiveMinimum": 0 },
+        "fallback_log_num_sigma": { "type": "integer", "minimum": 1 },
+        "fallback_log_threshold_rel": { "type": "number", "minimum": 0 },
+        "fallback_min_distance": { "type": "integer", "minimum": 0 },
+        "fallback_threshold": { "type": "number", "minimum": 0 }
+      }
+    },
+    "dedup": {
+      "type": "object",
+      "required": ["neighbor_slices", "r_xy_um"],
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "method": { "type": "string", "enum": ["kdtree", "voxel"], "default": "kdtree" },
+        "neighbor_slices": { "type": "integer", "minimum": 0 },
+        "r_xy_um": { "type": "number", "exclusiveMinimum": 0 },
+        "r_z_rule": { "type": "string" }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "required": ["leaf_csv", "hierarchy_csv", "qc_dir"],
+      "properties": {
+        "leaf_csv": { "type": "string", "minLength": 1 },
+        "hierarchy_csv": { "type": "string", "minLength": 1 },
+        "qc_dir": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

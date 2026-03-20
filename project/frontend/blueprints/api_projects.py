@@ -19,6 +19,10 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from project.frontend.api_errors import (
+    ERR_INVALID_INPUT,
+    ERR_NOT_FOUND,
+)
 from project.frontend.services import project_manager as pm
 
 bp = Blueprint("api_projects", __name__)
@@ -37,7 +41,9 @@ def projects_create():
     body = request.get_json(silent=True) or {}
     name = str(body.get("name", "")).strip()
     if not name:
-        return jsonify({"ok": False, "error": "name is required"}), 400
+        return jsonify(
+            {"ok": False, "error": "name is required", "error_code": ERR_INVALID_INPUT}
+        ), 400
     description = str(body.get("description", ""))
     project = pm.create_project(name, description)
     return jsonify({"ok": True, "project": project}), 201
@@ -47,7 +53,9 @@ def projects_create():
 def projects_get(project_id: str):
     project = pm.get_project(project_id)
     if not project:
-        return jsonify({"ok": False, "error": "project not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "project not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     samples = pm.list_samples(project_id)
     return jsonify({"ok": True, "project": project, "samples": samples})
 
@@ -56,7 +64,9 @@ def projects_get(project_id: str):
 def projects_delete(project_id: str):
     deleted = pm.delete_project(project_id)
     if not deleted:
-        return jsonify({"ok": False, "error": "project not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "project not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     return jsonify({"ok": True})
 
 
@@ -66,18 +76,24 @@ def projects_delete(project_id: str):
 @bp.get("/api/projects/<project_id>/samples")
 def samples_list(project_id: str):
     if not pm.get_project(project_id):
-        return jsonify({"ok": False, "error": "project not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "project not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     return jsonify({"ok": True, "samples": pm.list_samples(project_id)})
 
 
 @bp.post("/api/projects/<project_id>/samples")
 def samples_add(project_id: str):
     if not pm.get_project(project_id):
-        return jsonify({"ok": False, "error": "project not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "project not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     body = request.get_json(silent=True) or {}
     name = str(body.get("name", "")).strip()
     if not name:
-        return jsonify({"ok": False, "error": "name is required"}), 400
+        return jsonify(
+            {"ok": False, "error": "name is required", "error_code": ERR_INVALID_INPUT}
+        ), 400
     sample = pm.add_sample(
         project_id,
         name=name,
@@ -92,7 +108,7 @@ def samples_add(project_id: str):
 def sample_get(sample_id: str):
     sample = pm.get_sample(sample_id)
     if not sample:
-        return jsonify({"ok": False, "error": "sample not found"}), 404
+        return jsonify({"ok": False, "error": "sample not found", "error_code": ERR_NOT_FOUND}), 404
     return jsonify({"ok": True, "sample": sample})
 
 
@@ -100,7 +116,7 @@ def sample_get(sample_id: str):
 def sample_delete(sample_id: str):
     deleted = pm.delete_sample(sample_id)
     if not deleted:
-        return jsonify({"ok": False, "error": "sample not found"}), 404
+        return jsonify({"ok": False, "error": "sample not found", "error_code": ERR_NOT_FOUND}), 404
     return jsonify({"ok": True})
 
 

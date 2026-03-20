@@ -37,6 +37,8 @@ dev = [
     "pytest-mock",
     "pre-commit",
     "ruff",
+    "jsonschema>=4.21",
+    "openpyxl>=3.1",
 ]
 
 [project.scripts]
@@ -44,8 +46,13 @@ brainfast-server   = "project.frontend.server:main"
 brainfast-pipeline = "project.scripts.main:main"
 
 [build-system]
-requires = ["setuptools>=65", "wheel"]
+requires = ["setuptools>=65", "setuptools-scm>=8.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "project/_version.py"
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
 
 [tool.setuptools.packages.find]
 where = ["."]

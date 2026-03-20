@@ -112,6 +112,10 @@
         <span class="nav-icon">📊</span>
         <span data-i18n="nav.results">Results</span>
       </button>
+      <button class="nav-btn" data-tab="projects">
+        <span class="nav-icon">📁</span>
+        <span data-i18n="nav.projects">Projects</span>
+      </button>
     </nav>
     <div class="sidebar-footer">
       <div id="errorPanel" class="error-panel">
@@ -138,10 +142,12 @@
         <button class="lang-btn active" data-lang="en">EN</button>
         <span class="lang-sep">/</span>
         <button class="lang-btn" data-lang="zh">中文</button>
+        <button id="themeToggleBtn" title="Toggle light/dark theme" style="background:none;border:none;cursor:pointer;font-size:1.1em;margin-left:8px;opacity:0.7" aria-label="Toggle theme">🌙</button>
       </div>
       <div class="sidebar-meta">
         <span class="version" id="versionText">v0.0.0</span>
         <span class="status-badge" id="statusBadge" data-i18n="status.idle">Idle</span>
+        <button id="startTourBtn" title="Guided tour" style="background:none;border:none;cursor:pointer;font-size:1em;opacity:0.6;margin-left:4px" data-i18n-title="tour.btnTitle">?</button>
       </div>
     </div>
   </aside>
@@ -549,6 +555,17 @@
           </div>
         </div>
 
+        <div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <label class="field-label" style="margin:0;flex-direction:row;align-items:center;gap:8px">
+            <span data-i18n="label.confidenceThreshold">Confidence Threshold</span>
+            <input id="confidenceThreshold" type="range" min="0" max="1" step="0.05" value="0"
+              style="width:120px;vertical-align:middle;cursor:pointer"
+              oninput="document.getElementById('confidenceThresholdVal').textContent=parseFloat(this.value).toFixed(2)">
+            <span id="confidenceThresholdVal" style="color:#aaa;min-width:30px;font-size:0.9em">0.00</span>
+          </label>
+          <span class="field-hint" data-i18n="hint.confidenceThreshold" style="margin:0"></span>
+        </div>
+
         <div class="progress-section">
           <div class="progress-header">
             <span id="stepText" data-i18n="progress.waiting">Waiting to start...</span>
@@ -597,6 +614,14 @@
         </div>
       </section>
 
+      <!-- Z Continuity: AP-axis continuity chart -->
+      <section class="panel" id="zContinuitySection" style="display:none">
+        <h2 data-i18n="qc.zContinuityTitle">AP-Axis Z Continuity</h2>
+        <p class="hint-text" data-i18n="qc.zContinuityHint"></p>
+        <div id="zContinuityChart" style="width:100%;overflow-x:auto;margin:10px 0"></div>
+        <div id="zContinuitySummary" style="margin-top:8px;font-size:0.9em"></div>
+      </section>
+
       <!-- Best Slice: raw vs atlas comparison -->
       <section class="panel" id="bestSliceSection" style="display:none">
         <h2 data-i18n="qc.bestSliceTitle">Registration Slice vs Atlas Registration</h2>
@@ -637,6 +662,7 @@
         <div class="topbar-actions">
           <button id="refreshBtn"       class="btn-secondary" data-i18n="btn.refreshResults">🔁 Refresh</button>
           <button id="exportBtn"        class="btn-secondary" data-i18n="btn.exportCsv">⬇️ Export CSV</button>
+          <button id="exportExcelBtn"   class="btn-secondary" data-i18n="btn.exportExcel">📊 Export Excel</button>
           <button id="exportMethodsBtn" class="btn-secondary" data-i18n="btn.exportMethods">📝 Export Methods Text</button>
         </div>
       </header>
@@ -650,6 +676,13 @@
         </div>
         <div id="resultSummaryWarnings" class="results-warning-list"></div>
         <div id="resultSummaryCards" class="result-summary-grid"></div>
+      </section>
+
+      <!-- AP axis density chart -->
+      <section class="panel" id="apDensitySection" style="display:none">
+        <h2 data-i18n="chart.apDensityTitle">AP-Axis Cell Density Profile</h2>
+        <p class="hint-text" data-i18n="chart.apDensityHint">Cell count per atlas AP position — shows injection spread along the anterior-posterior axis.</p>
+        <div id="apDensityChart" style="width:100%;overflow-x:auto;margin:8px 0"></div>
       </section>
 
       <!-- Cell count chart (static PNG from matplotlib) -->
@@ -685,16 +718,24 @@
             <span class="results-collapse-hint" data-i18n="results.expandHint">Expand to browse and search</span>
           </summary>
           <div class="results-collapse-body">
-            <div class="results-search-row">
+            <div class="results-search-row" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
               <input id="regionSearch" class="search-input" data-i18n-ph="ph.regionSearch" placeholder="🔍 Search region name..." />
+              <label id="morphToggleLabel" style="display:none;align-items:center;gap:6px;font-size:0.85em;color:#aaa;cursor:pointer">
+                <input type="checkbox" id="morphToggle" style="cursor:pointer">
+                <span data-i18n="results.morphToggle">Show morphology</span>
+              </label>
             </div>
             <table id="resultsTable">
               <thead>
                 <tr>
                   <th data-i18n="th.region">Region Name</th>
                   <th data-i18n="th.count">Cell Count</th>
+                  <th data-i18n="th.ci" class="ci-col" style="color:#888;font-size:0.8em">95% CI</th>
                   <th data-i18n="th.pct">%</th>
                   <th data-i18n="th.bar">Distribution</th>
+                  <th class="morph-col" data-i18n="th.elongation" style="display:none">Elongation</th>
+                  <th class="morph-col" data-i18n="th.area" style="display:none">Area (px)</th>
+                  <th class="morph-col" data-i18n="th.intensity" style="display:none">Intensity</th>
                 </tr>
               </thead>
               <tbody id="resultRows"></tbody>
@@ -733,6 +774,25 @@
         <div id="registrationRunsEmpty" class="empty-hint" data-i18n="reg3d.empty">No 3D registration runs found yet.</div>
       </section>
 
+      <!-- Multi-channel co-expression panel -->
+      <section class="panel" id="coexpressionSection" style="display:none">
+        <h2 data-i18n="coexpr.title">Co-expression by Region</h2>
+        <p class="hint-text" data-i18n="coexpr.hint">Cell counts per atlas region for each fluorescence channel — only shown when per-channel leaf CSVs exist.</p>
+        <div id="coexpressionTable" style="overflow-x:auto;margin-top:8px"></div>
+      </section>
+
+      <!-- Cross-sample comparison panel -->
+      <section class="panel" id="compareSamplesSection">
+        <h2 data-i18n="compare.multi.title">Cross-Sample Region Comparison</h2>
+        <p class="hint-text" data-i18n="compare.multi.hint">Enter output directories from multiple runs to compare cell counts across samples.</p>
+        <div id="compareDirList" style="display:flex;flex-direction:column;gap:6px;margin:10px 0"></div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button id="compareAddDirBtn" class="btn-secondary" data-i18n="compare.multi.addDir">+ Add Directory</button>
+          <button id="compareRunBtn" class="btn-primary" data-i18n="compare.multi.run">Compare</button>
+        </div>
+        <div id="compareResultTable" style="overflow-x:auto"></div>
+      </section>
+
       <section class="panel">
         <div class="results-toolbar">
           <h2 data-i18n="outputs.title">Output Files</h2>
@@ -743,6 +803,39 @@
         <div id="outputFileEmpty" class="empty-hint" data-i18n="outputs.empty">No output files yet</div>
       </section>
     </div><!-- /tab-results -->
+
+
+    <!-- ================================================
+         TAB 4: Projects & Batch Queue
+    ================================================ -->
+    <div class="tab-content" id="tab-projects">
+      <header class="topbar">
+        <h1 data-i18n="nav.projects">Projects</h1>
+        <div class="topbar-actions">
+          <button id="refreshProjectsBtn" class="btn-secondary" data-i18n="btn.refreshResults">🔁 Refresh</button>
+        </div>
+      </header>
+
+      <!-- Create / list projects -->
+      <section class="panel">
+        <h2 data-i18n="projects.title">My Projects</h2>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <input id="newProjectName" type="text" class="search-input"
+            style="flex:2;max-width:260px" data-i18n-ph="projects.namePh" placeholder="Project name…" />
+          <input id="newProjectDesc" type="text" class="search-input"
+            style="flex:3;max-width:360px" data-i18n-ph="projects.descPh" placeholder="Description (optional)" />
+          <button id="createProjectBtn" class="btn-primary" data-i18n="projects.create">+ Create Project</button>
+        </div>
+        <div id="projectsList"><div class="empty-hint" data-i18n="projects.empty">No projects yet. Create one above.</div></div>
+      </section>
+
+      <!-- Batch queue -->
+      <section class="panel">
+        <h2 data-i18n="batch.title">Batch Queue</h2>
+        <p class="hint-text" data-i18n="batch.hint">Samples queued here are processed one by one automatically.</p>
+        <div id="batchQueueTable"><div class="empty-hint" data-i18n="batch.empty">Queue is empty.</div></div>
+      </section>
+    </div><!-- /tab-projects -->
 
   </main>
 </div><!-- /app -->

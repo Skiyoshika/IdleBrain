@@ -4,6 +4,34 @@ import json
 from pathlib import Path
 from typing import Any
 
+_SCHEMA_PATH = Path(__file__).parent.parent / "configs" / "run_config.schema.json"
+
+
+def validate_against_schema(cfg: dict[str, Any]) -> list[dict[str, str]]:
+    """Validate *cfg* against run_config.schema.json using jsonschema.
+
+    Returns a list of issue dicts (same format as collect_runtime_config_issues).
+    Returns an empty list if jsonschema is not installed (graceful degradation).
+    """
+    try:
+        import jsonschema  # type: ignore
+    except ImportError:
+        return []
+    if not _SCHEMA_PATH.exists():
+        return []
+    try:
+        schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+        validator = jsonschema.Draft7Validator(schema)
+        errors = sorted(validator.iter_errors(cfg), key=lambda e: list(e.absolute_path))
+        issues = []
+        for err in errors:
+            path = ".".join(str(p) for p in err.absolute_path) or "<root>"
+            issues.append({"field": path, "severity": "error", "message": err.message})
+        return issues
+    except Exception:
+        return []
+
+
 _PLACEHOLDER_STRINGS = {"", "todo", "tbd", "changeme", "required"}
 
 
@@ -132,7 +160,7 @@ def collect_runtime_config_issues(
     *,
     require_input_dir: bool = False,
 ) -> list[dict[str, str]]:
-    issues: list[dict[str, str]] = []
+    issues: list[dict[str, str]] = validate_against_schema(cfg)
 
     _require_text(cfg, "project.name", issues)
     _require_text(cfg, "input.slice_glob", issues)

@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to build (e.g. v0.5.1)"
+        required: false
+
+jobs:
+  # ── Build Windows EXE and upload to GitHub Release ────────────────────────
+  build-windows-exe:
+    name: Build Windows EXE
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for setuptools-scm
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[advanced]" pyinstaller
+
+      - name: Write version.json
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python project/scripts/build_version_json.py
+
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller `
+            --onefile `
+            --name brainfast `
+            --add-data "project/frontend/index.html;project/frontend" `
+            --add-data "project/frontend/app.js;project/frontend" `
+            --add-data "project/frontend/styles.css;project/frontend" `
+            --add-data "project/version.json;project" `
+            --hidden-import=flask `
+            --hidden-import=scipy `
+            --hidden-import=skimage `
+            project/frontend/server.py
+        shell: pwsh
+
+      - name: Rename EXE with version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          Move-Item dist\brainfast.exe "dist\brainfast-${version}-windows.exe"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/brainfast-*.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Run integration tests on self-hosted runner (has atlas file) ──────────
+  # Requires a self-hosted runner registered with label: brainfast
+  # To enable: add runner at repo Settings → Actions → Runners
+  #
+  # integration-tests:
+  #   name: Integration tests (self-hosted)
+  #   runs-on: [self-hosted, brainfast]
+  #   needs: build-windows-exe
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Run integration tests
+  #       run: python -m pytest project/tests/integration/ -v --tb=short

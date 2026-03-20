@@ -11,6 +11,10 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+from project.frontend.api_errors import (
+    ERR_INVALID_INPUT,
+    ERR_NOT_FOUND,
+)
 from project.frontend.services import batch_queue as bq
 from project.frontend.services import project_manager as pm
 
@@ -37,14 +41,20 @@ def batch_enqueue():
     input_dir = str(body.get("inputDir", "")).strip()
 
     if not sample_id:
-        return jsonify({"ok": False, "error": "sampleId is required"}), 400
+        return jsonify(
+            {"ok": False, "error": "sampleId is required", "error_code": ERR_INVALID_INPUT}
+        ), 400
     if not config_path:
-        return jsonify({"ok": False, "error": "configPath is required"}), 400
+        return jsonify(
+            {"ok": False, "error": "configPath is required", "error_code": ERR_INVALID_INPUT}
+        ), 400
     if not input_dir:
-        return jsonify({"ok": False, "error": "inputDir is required"}), 400
+        return jsonify(
+            {"ok": False, "error": "inputDir is required", "error_code": ERR_INVALID_INPUT}
+        ), 400
 
     if not pm.get_sample(sample_id):
-        return jsonify({"ok": False, "error": "sample not found"}), 404
+        return jsonify({"ok": False, "error": "sample not found", "error_code": ERR_NOT_FOUND}), 404
 
     channels = body.get("channels", ["red"])
     if not isinstance(channels, list) or not channels:
@@ -77,6 +87,8 @@ def batch_cancel():
     body = request.get_json(silent=True) or {}
     sample_id = str(body.get("sampleId", "")).strip()
     if not sample_id:
-        return jsonify({"ok": False, "error": "sampleId is required"}), 400
+        return jsonify(
+            {"ok": False, "error": "sampleId is required", "error_code": ERR_INVALID_INPUT}
+        ), 400
     removed = bq.cancel_queued(sample_id)
     return jsonify({"ok": True, "removed": removed})

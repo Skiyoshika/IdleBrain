@@ -45,7 +45,8 @@ def test_preflight_returns_structured_warning(tmp_path: Path, monkeypatch) -> No
     struct_path.write_text("id,name\n1,root\n", encoding="utf-8")
     config_path = tmp_path / "run_config.json"
     config_path.write_text(json.dumps(_minimal_cfg(input_dir)), encoding="utf-8")
-    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path / "outputs")
+    # OUTPUT_DIR must contain the config_path so _resolve_config_path() containment check passes
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
 
     payload = {
         "configPath": str(config_path),
@@ -86,7 +87,8 @@ def test_preflight_returns_structured_error_for_invalid_runtime_config(
     cfg["input"]["pixel_size_um_xy"] = 0
     config_path = tmp_path / "bad_run_config.json"
     config_path.write_text(json.dumps(cfg), encoding="utf-8")
-    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path / "outputs")
+    # OUTPUT_DIR must contain the config_path so containment check passes
+    monkeypatch.setattr(ctx, "OUTPUT_DIR", tmp_path)
 
     payload = {
         "configPath": str(config_path),
@@ -194,4 +196,4 @@ def test_info_reads_version_json() -> None:
         resp = client.get("/api/info")
         assert resp.status_code == 200
         data = resp.get_json()
-        assert data["version"] == "0.4.0"
+        assert data["version"] == "0.5.1"

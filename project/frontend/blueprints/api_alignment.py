@@ -9,6 +9,10 @@ from flask import Blueprint, jsonify, request, send_from_directory
 from tifffile import imread, imwrite
 
 import project.frontend.server_context as ctx
+from project.frontend.api_errors import (
+    ERR_INVALID_INPUT,
+    ERR_NOT_FOUND,
+)
 from project.frontend.services.alignment_service import (
     apply_affine_alignment,
     apply_nonlinear_alignment,
@@ -27,7 +31,9 @@ def align_nonlinear():
     atlas_label_path = Path(payload.get("atlasLabelPath", ""))
     pairs_csv = ctx._job_file(job_id, "landmark_pairs.csv")
     if not real_path.exists() or not atlas_label_path.exists() or not pairs_csv.exists():
-        return jsonify({"ok": False, "error": "missing real/atlas/pairs file"}), 400
+        return jsonify(
+            {"ok": False, "error": "missing real/atlas/pairs file", "error_code": ERR_INVALID_INPUT}
+        ), 400
 
     out_label = ctx._job_file(job_id, "aligned_label_nonlinear.tif")
     compare_png = ctx._job_file(job_id, "overlay_compare_nonlinear.png")
@@ -36,7 +42,7 @@ def align_nonlinear():
             real_path, atlas_label_path, pairs_csv, out_label, compare_png
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
     return jsonify({"ok": True, "jobId": job_id, **result})
 
@@ -45,7 +51,13 @@ def align_nonlinear():
 def outputs_overlay_compare_nonlinear():
     fp = ctx._job_file(ctx._query_job_id(), "overlay_compare_nonlinear.png")
     if not fp.exists():
-        return jsonify({"ok": False, "error": "nonlinear overlay compare not found"}), 404
+        return jsonify(
+            {
+                "ok": False,
+                "error": "nonlinear overlay compare not found",
+                "error_code": ERR_NOT_FOUND,
+            }
+        ), 404
     return send_from_directory(fp.parent, fp.name)
 
 
@@ -53,7 +65,9 @@ def outputs_overlay_compare_nonlinear():
 def outputs_auto_label_slice():
     fp = ctx._job_file(ctx._query_job_id(), "auto_label_slice.tif")
     if not fp.exists():
-        return jsonify({"ok": False, "error": "auto label slice not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "auto label slice not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     return send_from_directory(fp.parent, fp.name)
 
 
@@ -61,7 +75,9 @@ def outputs_auto_label_slice():
 def outputs_landmark_preview():
     fp = ctx._job_file(ctx._query_job_id(), "landmark_preview.png")
     if not fp.exists():
-        return jsonify({"ok": False, "error": "landmark preview not found"}), 404
+        return jsonify(
+            {"ok": False, "error": "landmark preview not found", "error_code": ERR_NOT_FOUND}
+        ), 404
     return send_from_directory(fp.parent, fp.name)
 
 
@@ -73,13 +89,19 @@ def align_landmark_preview():
     atlas_path = Path(payload.get("atlasPath", ""))
     pairs_csv = ctx._job_file(job_id, "landmark_pairs.csv")
     if not real_path.exists() or not atlas_path.exists() or not pairs_csv.exists():
-        return jsonify({"ok": False, "error": "missing real/atlas or pairs file"}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "missing real/atlas or pairs file",
+                "error_code": ERR_INVALID_INPUT,
+            }
+        ), 400
 
     fp = ctx._job_file(job_id, "landmark_preview.png")
     try:
         n_points = render_landmark_preview(real_path, atlas_path, pairs_csv, fp)
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
     return jsonify({"ok": True, "preview": str(fp), "points": n_points, "jobId": job_id})
 
@@ -91,7 +113,9 @@ def align_landmarks():
     real_path = Path(payload.get("realPath", ""))
     atlas_path = Path(payload.get("atlasPath", ""))
     if not real_path.exists() or not atlas_path.exists():
-        return jsonify({"ok": False, "error": "real or atlas path not found"}), 400
+        return jsonify(
+            {"ok": False, "error": "real or atlas path not found", "error_code": ERR_NOT_FOUND}
+        ), 400
 
     out_csv = ctx._job_file(job_id, "landmark_pairs.csv")
     try:
@@ -104,7 +128,7 @@ def align_landmarks():
             ransac_residual=float(payload.get("ransacResidual", 8.0)),
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
     return jsonify({"ok": True, "jobId": job_id, **res})
 
 
@@ -116,7 +140,9 @@ def align_apply():
     atlas_label_path = Path(payload.get("atlasLabelPath", ""))
     pairs_csv = ctx._job_file(job_id, "landmark_pairs.csv")
     if not real_path.exists() or not atlas_label_path.exists() or not pairs_csv.exists():
-        return jsonify({"ok": False, "error": "missing real/atlas/pairs file"}), 400
+        return jsonify(
+            {"ok": False, "error": "missing real/atlas/pairs file", "error_code": ERR_INVALID_INPUT}
+        ), 400
 
     out_label = ctx._job_file(job_id, "aligned_label_ai.tif")
     compare_png = ctx._job_file(job_id, "overlay_compare.png")
@@ -125,7 +151,7 @@ def align_apply():
             real_path, atlas_label_path, pairs_csv, out_label, compare_png
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
     return jsonify({"ok": True, "jobId": job_id, **result})
 
@@ -136,7 +162,9 @@ def add_manual_landmarks():
     job_id = ctx._payload_job_id(payload)
     pairs = payload.get("pairs", [])
     if not pairs:
-        return jsonify({"ok": False, "error": "no pairs provided"}), 400
+        return jsonify(
+            {"ok": False, "error": "no pairs provided", "error_code": ERR_INVALID_INPUT}
+        ), 400
     pairs_csv = ctx._job_file(job_id, "landmark_pairs.csv")
     new_rows = pd.DataFrame(pairs)
     if pairs_csv.exists():
@@ -155,7 +183,7 @@ def add_manual_landmarks():
 def slice_info():
     path = request.args.get("path", "")
     if not path or not Path(path).exists():
-        return jsonify({"ok": False, "error": "file not found"}), 400
+        return jsonify({"ok": False, "error": "file not found", "error_code": ERR_NOT_FOUND}), 400
     try:
         from tifffile import TiffFile
 
@@ -172,7 +200,7 @@ def slice_info():
             }
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400
 
 
 @bp.post("/slice/extract-z")
@@ -182,7 +210,9 @@ def slice_extract_z():
     src = Path(payload.get("path", ""))
     z = int(payload.get("z", 0))
     if not src.exists():
-        return jsonify({"ok": False, "error": "source file not found"}), 400
+        return jsonify(
+            {"ok": False, "error": "source file not found", "error_code": ERR_NOT_FOUND}
+        ), 400
     try:
         img = imread(str(src))
         if img.ndim >= 3:
@@ -202,4 +232,4 @@ def slice_extract_z():
             }
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "error_code": ERR_INVALID_INPUT}), 400

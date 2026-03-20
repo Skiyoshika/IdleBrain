@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  brainfast:
+    build: .
+    image: brainfast:latest
+    container_name: brainfast
+    ports:
+      - "8787:8787"
+    environment:
+      - BRAINFAST_HEADLESS=1
+      - BRAINFAST_HOST=0.0.0.0
+      - BRAINFAST_PORT=8787
+    volumes:
+      # Mount your data, atlas, and output directories
+      - ./data:/data
+      - ./atlas:/atlas
+      - ./outputs:/outputs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8787/api/info')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

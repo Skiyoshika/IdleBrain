@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -189,6 +190,7 @@ def _write_detection_summary(
     cfg: dict,
     detections: pd.DataFrame,
     deduped: pd.DataFrame | None = None,
+    atlas_sha256: str = "",
 ) -> None:
     det_cfg = cfg.get("detection", {})
     primary = str(det_cfg.get("primary_model", ""))
@@ -222,6 +224,8 @@ def _write_detection_summary(
                 str(k): int(v)
                 for k, v in deduped["detector"].fillna("unknown").value_counts().to_dict().items()
             }
+    if atlas_sha256:
+        summary["atlas_sha256"] = atlas_sha256
     (outputs_dir / "detection_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -291,6 +295,8 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
     annotation_nii = project_root / "annotation_25.nii.gz"
     if not annotation_nii.exists():
         raise FileNotFoundError(f"atlas annotation not found: {annotation_nii}")
+    # Compute atlas file fingerprint for reproducibility
+    _atlas_sha256 = hashlib.sha256(annotation_nii.read_bytes()).hexdigest()[:12]
     slice_glob = cfg.get("input", {}).get("slice_glob", "*.tif")
     files = _collect_slice_files(input_dir, slice_glob)
     if not files:
@@ -693,7 +699,9 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
             ]
         )
         empty.to_csv(outputs_dir / "cells_detected.csv", index=False)
-        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=empty)
+        _write_detection_summary(
+            outputs_dir, sampling=sampling, cfg=cfg, detections=empty, atlas_sha256=_atlas_sha256
+        )
         print("No detections found in real-input run.")
         emit_progress(
             6,
@@ -708,7 +716,9 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
     if not mapped_rows:
         cells = pd.concat(detect_rows, ignore_index=True)
         cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
-        _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells)
+        _write_detection_summary(
+            outputs_dir, sampling=sampling, cfg=cfg, detections=cells, atlas_sha256=_atlas_sha256
+        )
         print("Detections found, but none could be mapped after registration.")
         emit_progress(
             6,
@@ -742,7 +752,12 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
     deduped.to_csv(outputs_dir / "cells_dedup.csv", index=False)
     write_dedup_stats(stats, outputs_dir)
     _write_detection_summary(
-        outputs_dir, sampling=sampling, cfg=cfg, detections=cells, deduped=deduped
+        outputs_dir,
+        sampling=sampling,
+        cfg=cfg,
+        detections=cells,
+        deduped=deduped,
+        atlas_sha256=_atlas_sha256,
     )
 
     deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)

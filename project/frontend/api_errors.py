@@ -1,0 +1,37 @@
+"""api_errors.py — Structured error code constants for all API responses.
+
+Usage in blueprints::
+
+    from project.frontend.api_errors import ERR_NOT_FOUND, ERR_PIPELINE_RUNNING
+    return jsonify({"ok": False, "error": "...", "error_code": ERR_NOT_FOUND}), 404
+
+Frontend can branch on ``res.error_code`` without fragile string matching.
+"""
+
+# Pipeline lifecycle
+ERR_PIPELINE_RUNNING = "PIPELINE_ALREADY_RUNNING"
+ERR_PIPELINE_NOT_RUNNING = "PIPELINE_NOT_RUNNING"
+ERR_PIPELINE_START_FAILED = "PIPELINE_START_FAILED"
+
+# Input / config
+ERR_INVALID_INPUT = "INVALID_INPUT"
+ERR_MISSING_FIELD = "MISSING_FIELD"
+ERR_CONFIG_NOT_FOUND = "CONFIG_NOT_FOUND"
+ERR_CONFIG_PATH_DENIED = "CONFIG_PATH_DENIED"
+ERR_PREFLIGHT_FAILED = "PREFLIGHT_FAILED"
+
+# Resources
+ERR_NOT_FOUND = "NOT_FOUND"
+ERR_FILE_NOT_FOUND = "FILE_NOT_FOUND"
+ERR_JOB_NOT_FOUND = "JOB_NOT_FOUND"
+ERR_PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
+ERR_SAMPLE_NOT_FOUND = "SAMPLE_NOT_FOUND"
+
+# Conflicts
+ERR_ALREADY_EXISTS = "ALREADY_EXISTS"
+ERR_TASK_CONFLICT = "TASK_CONFLICT"
+
+# Internal
+ERR_INTERNAL = "INTERNAL_ERROR"
+ERR_IO = "IO_ERROR"
+ERR_DEPENDENCY = "DEPENDENCY_ERROR"
