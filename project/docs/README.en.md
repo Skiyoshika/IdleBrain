@@ -11,6 +11,113 @@ The repository currently has two main processing paths:
 
 The browser/desktop UI is the main entry point. The Python scripts remain the most direct way to reproduce runs and debug the pipeline.
 
+## Architecture
+
+### Runtime architecture
+
+```mermaid
+flowchart LR
+    user["User"] --> launcher["Start_Brainfast.bat<br/>or python project/frontend/server.py"]
+    launcher --> flask["Flask app<br/>project/frontend/server.py"]
+
+    subgraph blueprints["Registered blueprints"]
+        pipeline["api_pipeline"]
+        review["api_atlas / api_overlay / api_alignment / api_training / api_browse"]
+        outputs["api_outputs / api_demo"]
+        management["api_projects / api_batch / api_compare"]
+    end
+
+    flask --> pipeline
+    flask --> review
+    flask --> outputs
+    flask --> management
+
+    subgraph runtime["Shared runtime layer<br/>project/frontend/server_context.py"]
+        jobs["job-scoped run state<br/>running, logs, errors, progress, proc"]
+        tasks["autopick / preview task registries"]
+    end
+
+    pipeline --> runtime
+    review --> runtime
+    outputs --> runtime
+    management --> runtime
+
+    pipeline --> runner["_runner(job_id)"]
+    management --> batch["batch_queue.py<br/>single FIFO worker"]
+    batch --> runner
+
+    runner --> proc["subprocess<br/>project/scripts/main.py --run-real-input"]
+    proc --> jobout["project/outputs/jobs/JOB_ID/"]
+
+    outputs --> jobout
+    review --> jobout
+
+    management --> pm["project_manager.py"]
+    pm --> db["SQLite<br/>~/.brainfast/brainfast.db<br/>fallback: project/outputs/brainfast.db"]
+
+    cli3d["CLI-first 3D path<br/>project/scripts/run_3d_registration.py"] --> run3d["project/outputs/RUN_NAME/"]
+    run3d --> reports["report.html / overview.png / metrics / metadata / staining_stats.json"]
+    outputs --> reports
+```
+
+### 2D execution path
+
+```mermaid
+flowchart LR
+    input["Input TIFF slices"] --> channel["Extract active channel<br/>outputs/tmp_channel/"]
+    channel --> sampling["Resolve processing files<br/>single or merged"]
+    sampling --> loop["Per-slice loop"]
+
+    subgraph slice["Per-slice work in main.py"]
+        autopick["Atlas auto-pick"]
+        overlay["render_overlay()<br/>registered label + preview overlay"]
+        detect["detect.py<br/>Cellpose-first detection"]
+        map["map_cells_with_registered_label_slice()"]
+        autopick --> overlay --> detect --> map
+    end
+
+    loop --> slice
+    overlay --> regdir["registered_slices/<br/>auto label / registered label / overlay PNG"]
+    overlay --> qc["slice_registration_qc.csv"]
+    qc --> zreport["z_smoothness_report.json"]
+
+    detect --> detected["cells_detected.csv"]
+    map --> mappedrows["per-slice mapped rows"]
+    mappedrows --> dedup["apply_dedup_kdtree()"]
+    dedup --> dedupcsv["cells_dedup.csv"]
+    dedup --> mappedcsv["cells_mapped.csv"]
+    mappedcsv --> agg["aggregate_by_region()"]
+    agg --> leaf["cell_counts_leaf.csv"]
+    agg --> hierarchy["cell_counts_hierarchy.csv"]
+    detected --> support["detection_summary.json<br/>detection_samples/"]
+```
+
+### 3D execution path
+
+```mermaid
+flowchart LR
+    source["Stack TIFF or z*.tif folder"] --> nifti["volume_io.py<br/>volume_source_to_nifti()"]
+    nifti --> crop["Crop template + annotation<br/>AP range + hemisphere"]
+    crop --> backend["ANTs or Elastix backend"]
+    backend --> lap["Optional Laplacian refinement"]
+    lap --> fixed["Fixed-space outputs"]
+
+    fixed --> brain["registered_brain.nii.gz"]
+    fixed --> ann["annotation_fixed_half.nii.gz"]
+    fixed --> stats["registration_metrics.csv<br/>registration_metadata.json<br/>staining_stats.json"]
+    fixed --> overview["overview.png"]
+    stats --> report["build_run_report()<br/>report.html"]
+    report --> index["build_outputs_index()<br/>project/outputs/index.html"]
+```
+
+### Architecture invariants
+
+- The UI starts the 2D slice pipeline through a background runner thread. That runner launches `project/scripts/main.py` as a subprocess.
+- A run is isolated by `job_id`. Runtime state lives in `server_context._job_states`, and UI/API outputs live in `project/outputs/jobs/<job_id>/`.
+- The 3D path is currently CLI-first. The frontend reads generated 3D report folders through `api_outputs`; it does not yet own the full 3D execution loop.
+- Batch processing is serialized today. `batch_queue.py` uses one FIFO worker thread and starts one runner thread per queued sample.
+- Project and sample metadata are persisted in SQLite through `database.py` and `project_manager.py`.
+
 ## What Is In The Codebase Today
 
 The current tree already includes:
