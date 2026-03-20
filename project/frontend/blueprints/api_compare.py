@@ -67,7 +67,7 @@ def compare_regions():
     # Load each hierarchy CSV
     frames: list[tuple[str, pd.DataFrame]] = []
     missing: list[str] = []
-    for raw_dir, label in zip(dirs, labels):
+    for raw_dir, label in zip(dirs, labels, strict=True):
         csv_path = Path(raw_dir) / "cell_counts_hierarchy.csv"
         if not csv_path.exists():
             missing.append(str(csv_path))
@@ -92,7 +92,7 @@ def compare_regions():
 
     # Build unified region metadata (union of all region_ids, keep first occurrence)
     all_meta_rows: dict[tuple, dict] = {}
-    for label, df in frames:
+    for _label, df in frames:
         for _, row in df.iterrows():
             key = (int(row["region_id"]), str(row.get("hemisphere", "")))
             if key not in all_meta_rows:

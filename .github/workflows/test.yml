@@ -29,8 +29,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          cd project
-          python -m pytest tests/unit/ -v --tb=short --cov=scripts --cov-report=term-missing
+          python -m pytest project/tests/unit/ -v --tb=short --cov=project/scripts --cov-report=term-missing
 
   # ── Lint ──────────────────────────────────────────────────────────────────
   lint:

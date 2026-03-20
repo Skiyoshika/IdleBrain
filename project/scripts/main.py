@@ -30,6 +30,7 @@ try:
     from scripts.preprocess import merge_every_n_slices
     from scripts.qc import export_slice_qc
     from scripts.registration_adapter import bootstrap_registration_assets
+    from scripts.z_smoothness import smooth_ap_series, write_smoothness_report
 except Exception:
     from atlas_autopick import autopick_best_z, refine_atlas_z_by_size
     from atlas_mapper import map_cells_with_registered_label_slice
@@ -42,6 +43,7 @@ except Exception:
     from preprocess import merge_every_n_slices
     from qc import export_slice_qc
     from registration_adapter import bootstrap_registration_assets
+    from z_smoothness import smooth_ap_series, write_smoothness_report
 
 
 def _validated_float(cfg: dict, dotted_key: str) -> float:
@@ -280,8 +282,10 @@ def run_demo(cfg: dict):
 def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = None):
     project_root = _project_root()
     env_output_dir = os.environ.get("BRAINCOUNT_OUTPUT_DIR", "").strip()
-    outputs_dir = Path(outputs_dir) if outputs_dir is not None else (
-        Path(env_output_dir) if env_output_dir else project_root / "outputs"
+    outputs_dir = (
+        Path(outputs_dir)
+        if outputs_dir is not None
+        else (Path(env_output_dir) if env_output_dir else project_root / "outputs")
     )
     outputs_dir.mkdir(parents=True, exist_ok=True)
     annotation_nii = project_root / "annotation_25.nii.gz"
@@ -645,11 +649,6 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
 
     # ── Z-continuity analysis: flag AP jumps between adjacent slices ──────────
     try:
-        try:
-            from scripts.z_smoothness import smooth_ap_series, write_smoothness_report
-        except Exception:
-            from z_smoothness import smooth_ap_series, write_smoothness_report  # type: ignore[import]
-
         _z_max_dev = int(reg_cfg.get("z_smooth_max_dev", 8))
         _smoothness = smooth_ap_series(registration_rows, max_dev=_z_max_dev)
         write_smoothness_report(_smoothness, outputs_dir / "z_smoothness_report.json")
@@ -742,7 +741,9 @@ def run_real_input(cfg: dict, input_dir: Path, *, outputs_dir: Path | None = Non
     )
     deduped.to_csv(outputs_dir / "cells_dedup.csv", index=False)
     write_dedup_stats(stats, outputs_dir)
-    _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells, deduped=deduped)
+    _write_detection_summary(
+        outputs_dir, sampling=sampling, cfg=cfg, detections=cells, deduped=deduped
+    )
 
     deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)
     emit_progress(

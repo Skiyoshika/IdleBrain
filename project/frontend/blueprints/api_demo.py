@@ -13,9 +13,9 @@ import project.frontend.server_context as ctx
 from project.frontend.blueprints.api_outputs import _registration_run_dirs
 from project.frontend.services.demo_service import (
     build_cell_summary,
-    generate_detection_confidence_samples,
     generate_cell_chart,
     generate_demo_comparison,
+    generate_detection_confidence_samples,
     generate_registration_annotated_slice,
     generate_registration_best_slice,
     generate_registration_demo_panel,
@@ -125,7 +125,9 @@ def outputs_demo_annotated_slice():
                 top_n=12,
             )
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"3D annotated-slice generation failed: {exc}"}), 500
+            return jsonify(
+                {"ok": False, "error": f"3D annotated-slice generation failed: {exc}"}
+            ), 500
 
     outputs_root = _outputs_root()
     fp = outputs_root / "demo_annotated_slice.jpg"
@@ -149,7 +151,9 @@ def outputs_cell_chart():
     sources = [hier_path]
     if cells_path.exists():
         sources.append(cells_path)
-    if not chart_path.exists() or any(src.stat().st_mtime > chart_path.stat().st_mtime for src in sources):
+    if not chart_path.exists() or any(
+        src.stat().st_mtime > chart_path.stat().st_mtime for src in sources
+    ):
         try:
             generate_cell_chart(hier_path, chart_path, ctx.PROJECT_ROOT)
         except Exception as exc:
@@ -183,14 +187,20 @@ def outputs_detection_samples():
 
     sample_dir = _detection_sample_dir()
     manifest_path = _detection_sample_manifest_path()
-    regenerate = not manifest_path.exists() or cells_path.stat().st_mtime > manifest_path.stat().st_mtime
+    regenerate = (
+        not manifest_path.exists() or cells_path.stat().st_mtime > manifest_path.stat().st_mtime
+    )
 
     if regenerate:
         try:
             manifest = generate_detection_confidence_samples(cells_path, sample_dir, sample_count=3)
-            manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"detection sample generation failed: {exc}"}), 500
+            return jsonify(
+                {"ok": False, "error": f"detection sample generation failed: {exc}"}
+            ), 500
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -266,7 +276,10 @@ def outputs_demo_panel():
     reg_dir = outputs_root / "registered_slices"
     if not panel_path.exists() or (
         reg_dir.exists()
-        and any(p.stat().st_mtime > panel_path.stat().st_mtime for p in reg_dir.glob("slice_*_overlay.png"))
+        and any(
+            p.stat().st_mtime > panel_path.stat().st_mtime
+            for p in reg_dir.glob("slice_*_overlay.png")
+        )
     ):
         try:
             script = ctx.PROJECT_ROOT / "scripts" / "make_demo_panel.py"
@@ -325,7 +338,9 @@ def outputs_refresh_demo():
                     cols=4,
                     thumb_size=380,
                 )
-                generate_registration_best_slice(run_dir, _run_qc_artifact(run_dir, "qc_best_slice.jpg"))
+                generate_registration_best_slice(
+                    run_dir, _run_qc_artifact(run_dir, "qc_best_slice.jpg")
+                )
                 generate_registration_annotated_slice(
                     run_dir,
                     _run_qc_artifact(run_dir, "qc_annotated_slice.jpg"),

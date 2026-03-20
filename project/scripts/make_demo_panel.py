@@ -107,19 +107,25 @@ def _fallback_color(region_id: int) -> tuple[int, int, int]:
     return ((rng >> 16) & 0xFF, (rng >> 8) & 0xFF, rng & 0xFF)
 
 
-def _family_color(region_id: int, structure_lookup: dict[int, dict[str, str]] | None = None) -> tuple[int, int, int]:
-    info = (structure_lookup or {}).get(int(region_id)) or _load_structure_tree_lookup().get(int(region_id), {})
+def _family_color(
+    region_id: int, structure_lookup: dict[int, dict[str, str]] | None = None
+) -> tuple[int, int, int]:
+    info = (structure_lookup or {}).get(int(region_id)) or _load_structure_tree_lookup().get(
+        int(region_id), {}
+    )
     base = _hex_to_rgb(info.get("color", "") if info else "") or _fallback_color(int(region_id))
     r, g, b = [v / 255.0 for v in base]
-    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    h, lightness, saturation = colorsys.rgb_to_hls(r, g, b)
     jitter = (((int(region_id) * 37) % 9) - 4) * 0.028
-    l = min(0.78, max(0.28, l + jitter))
-    s = min(0.95, max(0.35, s * 1.08))
-    rr, gg, bb = colorsys.hls_to_rgb(h, l, s)
+    lightness = min(0.78, max(0.28, lightness + jitter))
+    saturation = min(0.95, max(0.35, saturation * 1.08))
+    rr, gg, bb = colorsys.hls_to_rgb(h, lightness, saturation)
     return int(rr * 255), int(gg * 255), int(bb * 255)
 
 
-def _meaningful_region_label(region_id: int, structure_lookup: dict[int, dict[str, str]]) -> tuple[str, str] | None:
+def _meaningful_region_label(
+    region_id: int, structure_lookup: dict[int, dict[str, str]]
+) -> tuple[str, str] | None:
     info = structure_lookup.get(int(region_id), {})
     acro = str(info.get("acronym", "") or "").strip()
     name = str(info.get("name", "") or "").strip()
@@ -157,7 +163,11 @@ def _select_region_annotations(
 ) -> list[dict[str, object]]:
     ids, counts = np.unique(label_arr[label_arr > 0], return_counts=True)
     ranking = sorted(
-        ((int(uid), int(count)) for uid, count in zip(ids, counts) if int(count) >= int(min_pixels)),
+        (
+            (int(uid), int(count))
+            for uid, count in zip(ids, counts, strict=True)
+            if int(count) >= int(min_pixels)
+        ),
         key=lambda item: item[1],
         reverse=True,
     )
@@ -209,9 +219,13 @@ def make_annotated_slice(
 
     structure_lookup = _combined_structure_lookup(structure_csv)
 
-    tissue_mask, tissue_alpha = _tissue_support_from_raw(Path(str(raw_tif))) if raw_tif else (
-        None,
-        None,
+    tissue_mask, tissue_alpha = (
+        _tissue_support_from_raw(Path(str(raw_tif)))
+        if raw_tif
+        else (
+            None,
+            None,
+        )
     )
 
     # --- vibrant recolor + smooth tissue clipping ---
@@ -379,11 +393,14 @@ def _crop_bounds(
 ) -> tuple[int, int, int, int]:
     if mask is not None:
         if mask.shape != shape:
-            mask = np.array(
-                Image.fromarray(mask.astype(np.uint8) * 255).resize(
-                    (shape[1], shape[0]), Image.Resampling.NEAREST
+            mask = (
+                np.array(
+                    Image.fromarray(mask.astype(np.uint8) * 255).resize(
+                        (shape[1], shape[0]), Image.Resampling.NEAREST
+                    )
                 )
-            ) > 127
+                > 127
+            )
         work_mask = mask.astype(bool)
     elif image is not None:
         gray = image.mean(axis=2) if image.ndim == 3 else image
@@ -478,12 +495,15 @@ def _vibrant_recolor(
 
         support = tissue_mask if tissue_mask is not None else (label_arr > 0)
         if support.shape != label_arr.shape:
-            support = np.array(
-                Image.fromarray(support.astype(np.uint8) * 255).resize(
-                    (label_arr.shape[1], label_arr.shape[0]),
-                    Image.Resampling.NEAREST,
+            support = (
+                np.array(
+                    Image.fromarray(support.astype(np.uint8) * 255).resize(
+                        (label_arr.shape[1], label_arr.shape[0]),
+                        Image.Resampling.NEAREST,
+                    )
                 )
-            ) > 127
+                > 127
+            )
         edge_band = morphology.dilation(
             find_boundaries(support.astype(bool), mode="outer", connectivity=2).astype(np.uint8),
             morphology.disk(3),

@@ -26,7 +26,9 @@ def compute_staining_stats(
 ) -> dict[str, float]:
     registered = np.asarray(nib.load(str(registered_path)).dataobj, dtype=np.float32)
     annotation = np.asarray(nib.load(str(annotation_path)).dataobj)
-    common_shape = tuple(min(a, b) for a, b in zip(registered.shape, annotation.shape, strict=False))
+    common_shape = tuple(
+        min(a, b) for a, b in zip(registered.shape, annotation.shape, strict=False)
+    )
     registered = registered[: common_shape[0], : common_shape[1], : common_shape[2]]
     annotation = annotation[: common_shape[0], : common_shape[1], : common_shape[2]]
 
@@ -76,7 +78,9 @@ def compute_staining_stats(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Compute staining coverage and staining rate for a registered volume")
+    ap = argparse.ArgumentParser(
+        description="Compute staining coverage and staining rate for a registered volume"
+    )
     ap.add_argument("--registered", required=True, help="Registered brain NIfTI path")
     ap.add_argument("--annotation", required=True, help="Fixed-space annotation NIfTI path")
     ap.add_argument("--out-json", default="", help="Optional JSON output path")

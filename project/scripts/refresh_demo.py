@@ -126,13 +126,15 @@ def _make_cell_chart():
 
 
 def _make_best_slice(idx: int):
-
-    import numpy as np
-    import tifffile
-    from make_demo_panel import _apply_tissue_alpha, _crop_to_brain, _tissue_support_from_raw, _vibrant_recolor
     from PIL import Image as Im
     from PIL import ImageDraw as ID
     from PIL import ImageFont as IF
+    from scripts.make_demo_panel import (
+        _apply_tissue_alpha,
+        _crop_to_brain,
+        _tissue_support_from_raw,
+        _vibrant_recolor,
+    )
 
     reg_dir = OUTPUT_DIR / "registered_slices"
     ov_path = reg_dir / f"slice_{idx:04d}_overlay.png"

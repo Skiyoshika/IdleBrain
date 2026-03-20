@@ -39,10 +39,18 @@ def _load_run(path: Path) -> dict[str, object] | None:
         "pre_Dice": pre_metrics.get("Dice", ""),
         "pre_MSE": pre_metrics.get("MSE", ""),
         "pre_PSNR": pre_metrics.get("PSNR", ""),
-        "delta_NCC": (metrics.get("NCC", 0.0) - float(pre_metrics.get("NCC", 0.0))) if pre_metrics else "",
-        "delta_SSIM": (metrics.get("SSIM", 0.0) - float(pre_metrics.get("SSIM", 0.0))) if pre_metrics else "",
-        "delta_Dice": (metrics.get("Dice", 0.0) - float(pre_metrics.get("Dice", 0.0))) if pre_metrics else "",
-        "delta_PSNR": (metrics.get("PSNR", 0.0) - float(pre_metrics.get("PSNR", 0.0))) if pre_metrics else "",
+        "delta_NCC": (metrics.get("NCC", 0.0) - float(pre_metrics.get("NCC", 0.0)))
+        if pre_metrics
+        else "",
+        "delta_SSIM": (metrics.get("SSIM", 0.0) - float(pre_metrics.get("SSIM", 0.0)))
+        if pre_metrics
+        else "",
+        "delta_Dice": (metrics.get("Dice", 0.0) - float(pre_metrics.get("Dice", 0.0)))
+        if pre_metrics
+        else "",
+        "delta_PSNR": (metrics.get("PSNR", 0.0) - float(pre_metrics.get("PSNR", 0.0)))
+        if pre_metrics
+        else "",
         "laplacian_points": lap.get("correspondences", ""),
         "laplacian_unique_voxels": lap.get("unique_boundary_voxels", ""),
         "laplacian_seconds": lap.get("solve_seconds", ""),
@@ -63,8 +71,14 @@ def collect_runs(outputs_root: Path) -> list[dict[str, object]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Summarize Brainfast 3D registration runs")
-    ap.add_argument("--outputs-root", default="outputs", help="Directory that contains run subdirectories")
-    ap.add_argument("--out-csv", default="outputs/registration_benchmark.csv", help="Where to write the summary CSV")
+    ap.add_argument(
+        "--outputs-root", default="outputs", help="Directory that contains run subdirectories"
+    )
+    ap.add_argument(
+        "--out-csv",
+        default="outputs/registration_benchmark.csv",
+        help="Where to write the summary CSV",
+    )
     args = ap.parse_args()
 
     outputs_root = Path(args.outputs_root)

@@ -6,16 +6,7 @@ import html
 import json
 from pathlib import Path
 
-sys_path_inserted = False
-if __name__ == "__main__":
-    import sys
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    sys_path_inserted = True
-
-from scripts.paths import bootstrap_sys_path
-
-PROJECT_DIR = bootstrap_sys_path()
+PROJECT_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_metrics(path: Path) -> dict[str, float]:
@@ -29,7 +20,9 @@ def _rel(path: Path, base: Path) -> str:
     return path.resolve().relative_to(base.resolve()).as_posix()
 
 
-def _delta_text(after: float, before: float | None, *, lower_is_better: bool = False) -> tuple[str, str]:
+def _delta_text(
+    after: float, before: float | None, *, lower_is_better: bool = False
+) -> tuple[str, str]:
     if before is None:
         return "final only", "neutral"
     delta = float(after) - float(before)
@@ -99,28 +92,47 @@ def _friendly_file_links(run_dir: Path, metadata: dict[str, object]) -> str:
     items: list[tuple[str, str, Path | None]] = [
         ("Open Final Report", "This page is the main thing to check.", run_dir / "report.html"),
         ("Final Overview", "Quick visual summary after all refinement.", run_dir / "overview.png"),
-        ("Before Overview", "Visual summary before Laplacian refinement.", run_dir / "overview_before.png"),
-        ("Final Volume", "Final registered brain NIfTI.", Path(str(metadata.get("registered_brain", ""))) if metadata.get("registered_brain") else None),
-        ("Before Laplacian", "The ANTs result before final refinement.", Path(str(metadata.get("registered_brain_pre_laplacian", ""))) if metadata.get("registered_brain_pre_laplacian") else None),
+        (
+            "Before Overview",
+            "Visual summary before Laplacian refinement.",
+            run_dir / "overview_before.png",
+        ),
+        (
+            "Final Volume",
+            "Final registered brain NIfTI.",
+            Path(str(metadata.get("registered_brain", "")))
+            if metadata.get("registered_brain")
+            else None,
+        ),
+        (
+            "Before Laplacian",
+            "The ANTs result before final refinement.",
+            Path(str(metadata.get("registered_brain_pre_laplacian", "")))
+            if metadata.get("registered_brain_pre_laplacian")
+            else None,
+        ),
         ("Metrics CSV", "Raw numbers for the final result.", run_dir / "registration_metrics.csv"),
-        ("Metadata JSON", "Paths, parameters, and run details.", run_dir / "registration_metadata.json"),
+        (
+            "Metadata JSON",
+            "Paths, parameters, and run details.",
+            run_dir / "registration_metadata.json",
+        ),
     ]
     cards: list[str] = []
     for title, desc, path in items:
         if path is None or not path.exists():
             continue
         href = _rel(path, run_dir)
+        safe_href = html.escape(href)
+        safe_title = html.escape(title)
+        safe_desc = html.escape(desc)
+        safe_name = html.escape(path.name)
         cards.append(
-            "<a class='file-card' href='{href}'>"
-            "<strong>{title}</strong>"
-            "<span>{desc}</span>"
-            "<code>{name}</code>"
-            "</a>".format(
-                href=html.escape(href),
-                title=html.escape(title),
-                desc=html.escape(desc),
-                name=html.escape(path.name),
-            )
+            f"<a class='file-card' href='{safe_href}'>"
+            f"<strong>{safe_title}</strong>"
+            f"<span>{safe_desc}</span>"
+            f"<code>{safe_name}</code>"
+            "</a>"
         )
     return "\n".join(cards)
 
@@ -136,8 +148,16 @@ def build_run_report(run_dir: Path) -> Path:
     metrics = _load_metrics(metrics_path)
     pre_metrics = metadata.get("metrics_before_laplacian", {}) or {}
     staining = metadata.get("staining_stats", {}) or {}
-    annotation_path = Path(str(metadata.get("annotation_fixed_half", ""))) if metadata.get("annotation_fixed_half") else None
-    pre_path = Path(str(metadata.get("registered_brain_pre_laplacian", ""))) if metadata.get("registered_brain_pre_laplacian") else None
+    annotation_path = (
+        Path(str(metadata.get("annotation_fixed_half", "")))
+        if metadata.get("annotation_fixed_half")
+        else None
+    )
+    pre_path = (
+        Path(str(metadata.get("registered_brain_pre_laplacian", "")))
+        if metadata.get("registered_brain_pre_laplacian")
+        else None
+    )
 
     if pre_path and pre_path.exists() and annotation_path and annotation_path.exists():
         before_overview = run_dir / "overview_before.png"
@@ -306,7 +326,7 @@ def build_run_report(run_dir: Path) -> Path:
       <p class="sub">Open this page first. If the two images below look aligned and the metric deltas are mostly green, this run is probably good enough for internal use.</p>
       <div class="verdict"><strong>{html.escape(verdict_title)}</strong><br>{html.escape(verdict_body)}</div>
       <div class="meta">
-        <strong>Pipeline</strong><span>{html.escape(str(metadata.get("backend", "")).upper())}{' + Laplacian' if metadata.get('laplacian_enabled') else ''}</span>
+        <strong>Pipeline</strong><span>{html.escape(str(metadata.get("backend", "")).upper())}{" + Laplacian" if metadata.get("laplacian_enabled") else ""}</span>
         <strong>Hemisphere</strong><span>{html.escape(str(metadata.get("hemisphere", "")))}</span>
         <strong>Target Resolution</strong><span>{html.escape(str(metadata.get("target_um", "")))} um</span>
         <strong>Run Folder</strong><span>{html.escape(str(run_dir))}</span>
@@ -400,24 +420,23 @@ def build_outputs_index(outputs_root: Path) -> Path:
 
     cards = []
     for input_name, backend, verdict, report_path in rows:
+        safe_href = html.escape(_rel(report_path, outputs_root))
+        safe_title = html.escape(input_name)
+        safe_backend = html.escape(backend.upper())
+        safe_verdict = html.escape(verdict)
+        safe_folder = html.escape(report_path.parent.name)
         cards.append(
-            "<a class='run-card' href='{href}'>"
-            "<strong>{title}</strong>"
-            "<span>{backend}</span>"
-            "<em>{verdict}</em>"
-            "<code>{folder}</code>"
-            "</a>".format(
-                href=html.escape(_rel(report_path, outputs_root)),
-                title=html.escape(input_name),
-                backend=html.escape(backend.upper()),
-                verdict=html.escape(verdict),
-                folder=html.escape(report_path.parent.name),
-            )
+            f"<a class='run-card' href='{safe_href}'>"
+            f"<strong>{safe_title}</strong>"
+            f"<span>{safe_backend}</span>"
+            f"<em>{safe_verdict}</em>"
+            f"<code>{safe_folder}</code>"
+            "</a>"
         )
 
     index_path = outputs_root / "index.html"
-    index_path.write_text(
-        """<!doctype html>
+    cards_html = "\n".join(cards)
+    index_html = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -444,15 +463,13 @@ def build_outputs_index(outputs_root: Path) -> Path:
       <p>Open one run card below. Each run has its own user-friendly report page.</p>
     </section>
     <section class="grid">
-      %s
+      __CARDS__
     </section>
   </div>
 </body>
 </html>
-"""
-        % "\n".join(cards),
-        encoding="utf-8",
-    )
+""".replace("__CARDS__", cards_html)
+    index_path.write_text(index_html, encoding="utf-8")
     (outputs_root / "OPEN_ME_FIRST.txt").write_text(
         "Open index.html first.\n\nEach run folder also contains its own report.html.\n",
         encoding="utf-8",
@@ -461,7 +478,9 @@ def build_outputs_index(outputs_root: Path) -> Path:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Build user-friendly HTML reports for Brainfast outputs")
+    ap = argparse.ArgumentParser(
+        description="Build user-friendly HTML reports for Brainfast outputs"
+    )
     ap.add_argument("--run-dir", default=None, help="Single run directory to build")
     ap.add_argument("--outputs-root", default="outputs", help="Outputs root for the index page")
     args = ap.parse_args()

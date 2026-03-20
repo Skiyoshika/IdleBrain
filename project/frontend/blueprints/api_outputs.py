@@ -126,7 +126,9 @@ def _registration_run_dirs(outputs_root: Path | None = None) -> list[Path]:
     for child in root.iterdir():
         if not child.is_dir():
             continue
-        if (child / "registration_metadata.json").exists() and (child / "registration_metrics.csv").exists():
+        if (child / "registration_metadata.json").exists() and (
+            child / "registration_metrics.csv"
+        ).exists():
             runs.append(child)
     state = _load_run_state(root)
     pinned_order = [name for name in state.get("pinned", []) if isinstance(name, str)]

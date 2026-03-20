@@ -93,7 +93,9 @@ def estimate_normal(point: np.ndarray, neighbours: np.ndarray) -> np.ndarray | N
     return np.asarray(vh[-1], dtype=np.float32)
 
 
-def orient_2d_normals(points: np.ndarray, normals: np.ndarray, section: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def orient_2d_normals(
+    points: np.ndarray, normals: np.ndarray, section: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     if len(points) == 0:
         return points, normals
 
@@ -267,7 +269,9 @@ def _slice_to_volume_points(points_2d: np.ndarray, slice_index: int, axis: int) 
     if axis == 0:
         return np.hstack([slice_column, points_2d.astype(np.int32)])
     if axis == 1:
-        return np.column_stack([points_2d[:, 0], slice_column[:, 0], points_2d[:, 1]]).astype(np.int32)
+        return np.column_stack([points_2d[:, 0], slice_column[:, 0], points_2d[:, 1]]).astype(
+            np.int32
+        )
     if axis == 2:
         return np.column_stack([points_2d, slice_column[:, 0]]).astype(np.int32)
     raise ValueError(f"unsupported axis: {axis}")
@@ -340,7 +344,9 @@ class WeightedDirichletLaplacian:
         self.spacing = tuple(float(v) for v in spacing)
         self.weights = tuple(np.float32(1.0 / max(v * v, 1e-12)) for v in self.spacing)
         self.size = int(np.prod(self.shape))
-        self._pairs = tuple(self._make_axis_pair(axis, weight) for axis, weight in enumerate(self.weights))
+        self._pairs = tuple(
+            self._make_axis_pair(axis, weight) for axis, weight in enumerate(self.weights)
+        )
         self.diagonal = self._build_diagonal()
         self.operator = LinearOperator(
             shape=(self.size, self.size),
@@ -354,7 +360,9 @@ class WeightedDirichletLaplacian:
             dtype=np.float32,
         )
 
-    def _make_axis_pair(self, axis: int, weight: np.float32) -> tuple[tuple[slice, ...], tuple[slice, ...], np.float32]:
+    def _make_axis_pair(
+        self, axis: int, weight: np.float32
+    ) -> tuple[tuple[slice, ...], tuple[slice, ...], np.float32]:
         head = [slice(None)] * 3
         tail = [slice(None)] * 3
         head[axis] = slice(1, None)
@@ -447,7 +455,9 @@ def _solve_field(
             rel = float(np.linalg.norm(resid) / rhs_norm)
             residual_history.append(rel)
             elapsed = time.time() - started
-            print(f"    {label}: iter {iteration}/{maxiter}, rel_resid={rel:0.2e}, {elapsed:0.0f}s elapsed")
+            print(
+                f"    {label}: iter {iteration}/{maxiter}, rel_resid={rel:0.2e}, {elapsed:0.0f}s elapsed"
+            )
 
     solution, info = cg(
         laplacian.operator,
@@ -475,7 +485,9 @@ def apply_deformation_field(
     volume = np.asarray(volume, dtype=np.float32)
     deformation_field = np.asarray(deformation_field, dtype=np.float32)
     if deformation_field.shape != (3,) + volume.shape:
-        raise ValueError(f"expected deformation field shape {(3,) + volume.shape}, got {deformation_field.shape}")
+        raise ValueError(
+            f"expected deformation field shape {(3,) + volume.shape}, got {deformation_field.shape}"
+        )
 
     out = np.zeros_like(volume, dtype=np.float32)
     y_grid = np.arange(volume.shape[1], dtype=np.float32)[None, :, None]
@@ -544,7 +556,9 @@ def refine_volume_with_laplacian(
     if len(fixed_points) == 0:
         raise RuntimeError("Laplacian refinement found no valid correspondence points")
 
-    fixed_unique, moving_unique, unique_linear = _aggregate_unique_correspondences(fixed_points, moving_points, shape)
+    fixed_unique, moving_unique, unique_linear = _aggregate_unique_correspondences(
+        fixed_points, moving_points, shape
+    )
     print(
         f"Laplacian refinement: Found {len(fixed_points)} correspondence points "
         f"({len(unique_linear)} unique boundary voxels)."
@@ -593,7 +607,9 @@ def refine_volume_with_laplacian(
     warped = apply_deformation_field(moving, deformation_field, chunk_slices=cfg.chunk_slices)
 
     final_registered_path = out_dir / "final_registered.nii.gz"
-    nib.save(nib.Nifti1Image(warped, fixed_img.affine, fixed_img.header), str(final_registered_path))
+    nib.save(
+        nib.Nifti1Image(warped, fixed_img.affine, fixed_img.header), str(final_registered_path)
+    )
 
     deformation_field_path = params_dir / "laplacian_deformation_field.npy"
     np.save(deformation_field_path, deformation_field)

@@ -13,9 +13,6 @@ from scripts.paths import bootstrap_sys_path
 
 PROJECT_DIR = bootstrap_sys_path()
 
-from scripts.allen_colors import load_allen_color_map
-from scripts.image_utils import norm_u8_robust
-
 
 def _fallback_color(region_id: int) -> tuple[int, int, int]:
     x = int(region_id) * 2654435761 & 0xFFFFFFFF
@@ -27,6 +24,8 @@ def _fallback_color(region_id: int) -> tuple[int, int, int]:
 
 
 def _render_brain_slice(arr: np.ndarray, mask: np.ndarray | None = None) -> np.ndarray:
+    from scripts.image_utils import norm_u8_robust
+
     x = arr.astype(np.float32, copy=False)
     use_mask = mask is not None and bool(np.any(mask))
     if use_mask:
@@ -49,7 +48,9 @@ def _render_brain_slice(arr: np.ndarray, mask: np.ndarray | None = None) -> np.n
     return rgb
 
 
-def _render_annotation_slice(arr: np.ndarray, color_map: dict[int, tuple[int, int, int]]) -> np.ndarray:
+def _render_annotation_slice(
+    arr: np.ndarray, color_map: dict[int, tuple[int, int, int]]
+) -> np.ndarray:
     out = np.full((*arr.shape, 3), (45, 130, 190), dtype=np.uint8)
     ids = np.unique(arr)
     ids = ids[ids > 0]
@@ -67,12 +68,12 @@ def make_registration_overview(
     slices: list[int],
     structure_csv: Path | None = None,
 ) -> Path:
+    from scripts.allen_colors import load_allen_color_map
+
     brain = np.asarray(nib.load(str(brain_volume)).dataobj)
     annotation = np.asarray(nib.load(str(annotation_volume)).dataobj)
     if brain.shape != annotation.shape:
-        raise ValueError(
-            f"brain/annotation shape mismatch: {brain.shape} vs {annotation.shape}"
-        )
+        raise ValueError(f"brain/annotation shape mismatch: {brain.shape} vs {annotation.shape}")
 
     color_map = load_allen_color_map(structure_csv) if structure_csv else {}
     panels: list[np.ndarray] = []

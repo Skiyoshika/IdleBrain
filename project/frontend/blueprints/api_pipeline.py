@@ -96,8 +96,12 @@ def _apply_runtime_overrides(base_cfg: dict, payload: dict) -> dict:
 def _runtime_path_issues(payload: dict) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
     input_dir = str(payload.get("inputDir", "")).strip()
-    atlas = str((payload.get("params", {}) or {}).get("atlasPath") or payload.get("atlasPath") or "").strip()
-    struct = str((payload.get("params", {}) or {}).get("structPath") or payload.get("structPath") or "").strip()
+    atlas = str(
+        (payload.get("params", {}) or {}).get("atlasPath") or payload.get("atlasPath") or ""
+    ).strip()
+    struct = str(
+        (payload.get("params", {}) or {}).get("structPath") or payload.get("structPath") or ""
+    ).strip()
 
     if not input_dir or not Path(input_dir).exists():
         issues.append(
@@ -254,7 +258,9 @@ def run_pipeline():
         daemon=True,
     )
     t.start()
-    return jsonify({"ok": True, "started": True, "jobId": job_id, "outputsDir": str(_job_outputs_dir(job_id))})
+    return jsonify(
+        {"ok": True, "started": True, "jobId": job_id, "outputsDir": str(_job_outputs_dir(job_id))}
+    )
 
 
 @bp.get("/api/status")
@@ -330,7 +336,9 @@ def cancel():
                 "Pipeline cancelled by user.", step="cancel", recoverable=True, state=job_state
             )
             return jsonify({"ok": True, "cancelled": True, "jobId": job_id})
-    return jsonify({"ok": False, "cancelled": False, "error": "no running process", "jobId": job_id}), 409
+    return jsonify(
+        {"ok": False, "cancelled": False, "error": "no running process", "jobId": job_id}
+    ), 409
 
 
 @bp.get("/api/logs")
@@ -392,7 +400,9 @@ def export_methods_text():
         sampling_cn = "原始单切片"
         sampling_en = "native single slices"
     if any(str(name).startswith("cellpose") for name in detector_counts):
-        detection_cn = f"细胞实例分割与计数采用 {detector_names}，并基于{sampling_cn}完成去重和图谱统计。"
+        detection_cn = (
+            f"细胞实例分割与计数采用 {detector_names}，并基于{sampling_cn}完成去重和图谱统计。"
+        )
         detection_en = (
             f"Cell counting used instance segmentation via {detector_names} on {sampling_en}, "
             f"followed by deduplication and hierarchical atlas aggregation."

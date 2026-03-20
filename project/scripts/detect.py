@@ -114,7 +114,16 @@ def _masks_to_centroids(
     detector: str,
     intensity_image: np.ndarray | None = None,
 ) -> pd.DataFrame:
-    _empty_cols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
+    _empty_cols = [
+        "cell_id",
+        "x",
+        "y",
+        "score",
+        "detector",
+        "area_px",
+        "elongation",
+        "mean_intensity",
+    ]
     if masks is None or masks.size == 0 or int(np.max(masks)) <= 0:
         return pd.DataFrame(columns=_empty_cols)
 
@@ -259,7 +268,7 @@ def detect_cells_log_fallback(
                 "score": float(img[y0, x1]),
                 "detector": "fallback_log",
                 "area_px": float(np.pi * r * r),
-                "elongation": 1.0,       # circular blob approximation
+                "elongation": 1.0,  # circular blob approximation
                 "mean_intensity": mean_int,
             }
         )
@@ -398,7 +407,16 @@ def detect_cells_cellpose(
                 tile_df["x"] = tile_df["x"].astype(np.float32) + float(x0)
                 tile_df["y"] = tile_df["y"].astype(np.float32) + float(y0)
                 tile_rows.append(tile_df)
-        _ecols = ["cell_id", "x", "y", "score", "detector", "area_px", "elongation", "mean_intensity"]
+        _ecols = [
+            "cell_id",
+            "x",
+            "y",
+            "score",
+            "detector",
+            "area_px",
+            "elongation",
+            "mean_intensity",
+        ]
         if not tile_rows:
             return pd.DataFrame(columns=_ecols)
         out = pd.concat(tile_rows, ignore_index=True)

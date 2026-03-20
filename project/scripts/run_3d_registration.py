@@ -28,9 +28,9 @@ import numpy as np
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.paths import bootstrap_sys_path
 from scripts.build_registration_report import build_outputs_index, build_run_report
 from scripts.laplacian_refine import LaplacianConfig, refine_volume_with_laplacian
+from scripts.paths import bootstrap_sys_path
 from scripts.staining_stats import compute_staining_stats
 from scripts.volume_io import inspect_volume_source, volume_source_to_nifti
 
@@ -92,7 +92,11 @@ def prepare_cropped_template(
         # AP crop
         data = data[ap_start : min(ap_end, data.shape[0]), :, :]
         # ML hemisphere
-        half = int(half_width) if half_width is not None and int(half_width) > 0 else data.shape[2] // 2
+        half = (
+            int(half_width)
+            if half_width is not None and int(half_width) > 0
+            else data.shape[2] // 2
+        )
         if hemisphere in ("right", "right_flipped"):
             data = data[:, :, max(0, data.shape[2] - half) :]
         else:
@@ -259,8 +263,7 @@ def compute_registration_metrics(
 
     z_indices = np.linspace(0, fixed.shape[0] - 1, num=max(1, sample_slices), dtype=int)
     ssim_scores = [
-        float(structural_similarity(fixed[z], registered[z], data_range=1.0))
-        for z in z_indices
+        float(structural_similarity(fixed[z], registered[z], data_range=1.0)) for z in z_indices
     ]
 
     fixed_mask = fixed > 0.10
@@ -415,16 +418,30 @@ def main():
     ap.add_argument("--config", default="configs/run_config_3d_sample.json")
     ap.add_argument("--skip-to-transformix", action="store_true")
     ap.add_argument("--out-dir", default=None)
-    ap.add_argument("--input-path", default=None, help="Override config input with stack TIFF or z*.tif folder")
-    ap.add_argument("--input-nii", default=None, help="Use an existing brain NIfTI instead of building one")
+    ap.add_argument(
+        "--input-path", default=None, help="Override config input with stack TIFF or z*.tif folder"
+    )
+    ap.add_argument(
+        "--input-nii", default=None, help="Use an existing brain NIfTI instead of building one"
+    )
     ap.add_argument("--pixel-size-um-xy", type=float, default=None, help="Override XY pixel size")
     ap.add_argument("--z-spacing-um", type=float, default=None, help="Override Z spacing")
-    ap.add_argument("--target-um", type=float, default=None, help="Target isotropic XY size when stacking TIFF")
-    ap.add_argument("--backend", default=None, help="Registration backend override: elastix or ants")
+    ap.add_argument(
+        "--target-um", type=float, default=None, help="Target isotropic XY size when stacking TIFF"
+    )
+    ap.add_argument(
+        "--backend", default=None, help="Registration backend override: elastix or ants"
+    )
     ap.add_argument("--atlas-hemisphere", default=None, help="Override atlas hemisphere")
-    ap.add_argument("--pad-z", type=int, default=None, help="Zero-pad input volume along Z before saving NIfTI")
-    ap.add_argument("--pad-y", type=int, default=None, help="Zero-pad input volume height before saving NIfTI")
-    ap.add_argument("--pad-x", type=int, default=None, help="Zero-pad input volume width before saving NIfTI")
+    ap.add_argument(
+        "--pad-z", type=int, default=None, help="Zero-pad input volume along Z before saving NIfTI"
+    )
+    ap.add_argument(
+        "--pad-y", type=int, default=None, help="Zero-pad input volume height before saving NIfTI"
+    )
+    ap.add_argument(
+        "--pad-x", type=int, default=None, help="Zero-pad input volume width before saving NIfTI"
+    )
     normalize_group = ap.add_mutually_exclusive_group()
     normalize_group.add_argument(
         "--normalize-input",
@@ -478,9 +495,21 @@ def main():
     fixed_annotation_override = _resolve_cfg_path(reg.get("fixed_annotation_path"))
     template_half_width = _cfg_int(reg.get("template_half_width"), 0)
     target_um = _resolve_target_um(args.target_um, volume_prep)
-    pad_z = max(0, int(args.pad_z)) if args.pad_z is not None else max(0, _cfg_int(volume_prep.get("pad_z"), 0))
-    pad_y = max(0, int(args.pad_y)) if args.pad_y is not None else max(0, _cfg_int(volume_prep.get("pad_y"), 0))
-    pad_x = max(0, int(args.pad_x)) if args.pad_x is not None else max(0, _cfg_int(volume_prep.get("pad_x"), 0))
+    pad_z = (
+        max(0, int(args.pad_z))
+        if args.pad_z is not None
+        else max(0, _cfg_int(volume_prep.get("pad_z"), 0))
+    )
+    pad_y = (
+        max(0, int(args.pad_y))
+        if args.pad_y is not None
+        else max(0, _cfg_int(volume_prep.get("pad_y"), 0))
+    )
+    pad_x = (
+        max(0, int(args.pad_x))
+        if args.pad_x is not None
+        else max(0, _cfg_int(volume_prep.get("pad_x"), 0))
+    )
     normalize_input = (
         bool(args.normalize_input)
         if args.normalize_input is not None
@@ -530,7 +559,9 @@ def main():
             print(f"\n[1/4] Brain NIfTI exists: {brain_nii}  shape={brain_shape}")
 
     # Compute AP range from filenames
-    ap_start, ap_end = _compute_ap_range_from_source(input_source if input_nii is None else None, z_scale, z_offset)
+    ap_start, ap_end = _compute_ap_range_from_source(
+        input_source if input_nii is None else None, z_scale, z_offset
+    )
     print(f"  AP range in atlas: [{ap_start}, {ap_end}]  ({ap_end - ap_start} slices)")
 
     # 2. Cropped template + annotation
@@ -540,7 +571,9 @@ def main():
         if not fixed_template_override.exists():
             raise FileNotFoundError(f"fixed template override not found: {fixed_template_override}")
         if not fixed_annotation_override.exists():
-            raise FileNotFoundError(f"fixed annotation override not found: {fixed_annotation_override}")
+            raise FileNotFoundError(
+                f"fixed annotation override not found: {fixed_annotation_override}"
+            )
         tmpl_cropped = fixed_template_override
         ann_cropped = fixed_annotation_override
     else:
@@ -610,7 +643,9 @@ def main():
             print(f"  Using existing pre-Laplacian result: {registered_brain_pre_laplacian}")
         else:
             shutil.copyfile(registered_brain, registered_brain_pre_laplacian)
-        metrics_before_laplacian = compute_registration_metrics(tmpl_cropped, registered_brain_pre_laplacian)
+        metrics_before_laplacian = compute_registration_metrics(
+            tmpl_cropped, registered_brain_pre_laplacian
+        )
         lap_result = refine_volume_with_laplacian(
             tmpl_cropped,
             registered_brain_pre_laplacian,
@@ -673,12 +708,20 @@ def main():
         overview_path = Path("")
     metadata = {
         "input_source": str((input_nii or input_source).resolve()),
-        "input_type": "input_nii" if input_nii is not None else (source_info.source_type if source_info else "unknown"),
+        "input_type": "input_nii"
+        if input_nii is not None
+        else (source_info.source_type if source_info else "unknown"),
         "brain_nii": str(brain_nii.resolve()),
         "fixed_template": str(tmpl_cropped.resolve()),
-        "fixed_template_override": str(fixed_template_override.resolve()) if fixed_template_override else "",
-        "fixed_annotation_override": str(fixed_annotation_override.resolve()) if fixed_annotation_override else "",
-        "registered_brain_pre_laplacian": str(registered_brain_pre_laplacian.resolve()) if registered_brain_pre_laplacian.exists() else "",
+        "fixed_template_override": str(fixed_template_override.resolve())
+        if fixed_template_override
+        else "",
+        "fixed_annotation_override": str(fixed_annotation_override.resolve())
+        if fixed_annotation_override
+        else "",
+        "registered_brain_pre_laplacian": str(registered_brain_pre_laplacian.resolve())
+        if registered_brain_pre_laplacian.exists()
+        else "",
         "registered_brain": str(registered_brain.resolve()),
         "annotation_fixed_half": str(fixed_annotation.resolve()),
         "overview_png": str(overview_path.resolve()) if str(overview_path) else "",
