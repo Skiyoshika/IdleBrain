@@ -16,6 +16,29 @@ const LANGS = {
     'nav.workflow': 'Registration Workflow',
     'nav.qc': 'Batch QC Review',
     'nav.results': 'Results',
+    'nav.projects': 'Projects',
+    'projects.title': 'My Projects',
+    'projects.create': '+ Create Project',
+    'projects.empty': 'No projects yet. Create one above.',
+    'projects.namePh': 'Project name…',
+    'projects.descPh': 'Description (optional)',
+    'projects.samples': 'Samples',
+    'projects.delete': 'Delete',
+    'sample.run': 'Load & Run',
+    'sample.status.done': 'Done',
+    'sample.status.running': 'Running',
+    'sample.status.queued': 'Queued',
+    'sample.status.pending': 'Pending',
+    'sample.status.error': 'Error',
+    'sample.addBtn': '+ Add Sample',
+    'sample.configPh': 'Config path…',
+    'sample.inputPh': 'Input directory…',
+    'sample.namePh': 'Sample name…',
+    'batch.title': 'Batch Queue',
+    'batch.hint': 'Samples queued here are processed one by one automatically.',
+    'batch.empty': 'Queue is empty.',
+    'batch.cancel': 'Cancel',
+    'batch.enqueue': 'Enqueue',
     'status.idle': 'Idle',
     'status.running': 'Running...',
     'status.error': 'Error',
@@ -141,14 +164,29 @@ const LANGS = {
     'results.expandHint': 'Expand to browse and search',
     'results.tableHint': 'This tree is for browsing hierarchy totals. Use the summary above for interpretation.',
     'compare.title': 'Channel Comparison (Total Cell Count)',
+    'compare.multi.title': 'Cross-Sample Region Comparison',
+    'compare.multi.hint': 'Enter output directories from multiple runs to compare cell counts across samples.',
+    'compare.multi.addDir': '+ Add Directory',
+    'compare.multi.run': 'Compare',
+    'compare.multi.label': 'Label',
+    'compare.multi.dirPlaceholder': 'Output directory path...',
+    'compare.multi.empty': 'Enter at least 2 output directories and click Compare.',
+    'compare.multi.noData': 'No matching regions found. Check that hierarchy CSV files exist in the selected directories.',
     'history.title': 'Run History',
     'th.region': 'Region Name',
     'th.count': 'Cell Count',
     'th.confidence': 'Confidence',
     'th.pct': '%',
+    'th.elongation': 'Elongation',
+    'th.area': 'Area (px)',
+    'th.intensity': 'Intensity',
+    'th.ci': '95% CI',
+    'results.morphToggle': 'Show morphology',
     'th.bar': 'Distribution',
     'chart.title': 'Distribution — Analysis Regions',
     'chart.imgTitle': 'Cell Count Summary',
+    'chart.apDensityTitle': 'AP-Axis Cell Density Profile',
+    'chart.apDensityHint': 'Cell count per atlas AP position — shows injection spread along the anterior-posterior axis.',
     'summary.title': 'Result Snapshot',
     'summary.hint': 'Check scope and mapping coverage before reading regional biology.',
     'summary.sample': 'Sample',
@@ -205,6 +243,10 @@ const LANGS = {
     'qc.annotatedSliceHint': 'Lightsheet image with Allen CCFv3 region boundaries and labels. Click to view full size.',
     'qc.bestSliceTitle': 'Registration Slice vs Atlas Registration',
     'qc.bestSliceHint': 'Registered-slice comparison — click to view full resolution',
+    'qc.zContinuityTitle': 'AP-Axis Z Continuity',
+    'qc.zContinuityHint': 'Atlas AP index per slice — blue=raw, green=smoothed, red=outlier. Outliers may indicate registration errors.',
+    'qc.zContinuityOk': 'AP series monotone — no outliers detected',
+    'qc.zContinuityWarn': '{n} AP outlier(s) detected — review registration for flagged slices',
     'qc.panelTitle': 'Whole-Brain Registration Overview',
     'qc.panelHint': 'Multi-slice atlas registration panel — click to view full size',
     'tab.qc.title': 'Batch QC Review',
@@ -289,6 +331,29 @@ const LANGS = {
     'nav.workflow': '配准工作流',
     'nav.qc': '批量QC审查',
     'nav.results': '统计结果',
+    'nav.projects': '项目管理',
+    'projects.title': '我的项目',
+    'projects.create': '+ 新建项目',
+    'projects.empty': '暂无项目，请在上方创建。',
+    'projects.namePh': '项目名称…',
+    'projects.descPh': '描述（可选）',
+    'projects.samples': '样本',
+    'projects.delete': '删除',
+    'sample.run': '加载并运行',
+    'sample.status.done': '完成',
+    'sample.status.running': '运行中',
+    'sample.status.queued': '排队中',
+    'sample.status.pending': '待处理',
+    'sample.status.error': '错误',
+    'sample.addBtn': '+ 添加样本',
+    'sample.configPh': '配置文件路径…',
+    'sample.inputPh': '输入目录…',
+    'sample.namePh': '样本名称…',
+    'batch.title': '批处理队列',
+    'batch.hint': '队列中的样本会自动逐个处理。',
+    'batch.empty': '队列为空。',
+    'batch.cancel': '取消',
+    'batch.enqueue': '加入队列',
     'status.idle': '空闲',
     'status.running': '运行中...',
     'status.error': '错误',
@@ -414,13 +479,28 @@ const LANGS = {
     'results.expandHint': '展开后查看和搜索',
     'results.tableHint': '这张树表用于浏览层级累计值；真正用于解释分布的请以上方摘要和图表为准。',
     'compare.title': '通道比较（细胞总数）',
+    'compare.multi.title': '跨样本脑区细胞数对比',
+    'compare.multi.hint': '输入多个运行结果目录，对比各脑区的细胞计数。',
+    'compare.multi.addDir': '+ 添加目录',
+    'compare.multi.run': '开始对比',
+    'compare.multi.label': '标签',
+    'compare.multi.dirPlaceholder': '输出目录路径...',
+    'compare.multi.empty': '请输入至少2个输出目录后点击"开始对比"。',
+    'compare.multi.noData': '未找到匹配脑区。请检查所选目录中是否存在层次CSV文件。',
     'history.title': '运行历史',
     'th.region': '脑区名称',
     'th.count': '细胞计数',
     'th.pct': '占比',
     'th.bar': '分布',
+    'th.elongation': '细胞延伸度',
+    'th.area': '面积(px)',
+    'th.intensity': '荧光强度',
+    'th.ci': '95% 置信区间',
+    'results.morphToggle': '显示形态特征',
     'chart.title': '细胞分布 — 分析脑区',
     'chart.imgTitle': '细胞计数汇总',
+    'chart.apDensityTitle': 'AP轴细胞密度分布',
+    'chart.apDensityHint': '每个图谱AP坐标的细胞数 — 反映注射点沿前后轴的扩散范围。',
     'summary.title': '结果摘要',
     'summary.hint': '先确认范围和图谱映射覆盖，再解读脑区分布。',
     'summary.sample': '样本',
@@ -478,6 +558,10 @@ const LANGS = {
     'qc.annotatedSliceHint': '光片图像叠加 Allen CCFv3 脑区边界与标签。点击查看大图。',
     'qc.bestSliceTitle': '配准切片 vs 图谱配准',
     'qc.bestSliceHint': '配准后切片左右对比图 — 点击查看原始分辨率',
+    'qc.zContinuityTitle': 'AP轴Z连续性检测',
+    'qc.zContinuityHint': '每切片图谱AP坐标 — 蓝=原始，绿=平滑，红=异常。异常点可能表示配准错误。',
+    'qc.zContinuityOk': 'AP序列单调 — 未检测到异常',
+    'qc.zContinuityWarn': '检测到 {n} 个AP异常 — 请检查标红切片的配准结果',
     'qc.panelTitle': '全脑配准总览',
     'qc.panelHint': '多切片图谱配准面板 — 点击查看大图',
     'tab.qc.title': '批量QC审查',
@@ -885,6 +969,7 @@ document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
     if (btn.dataset.tab === 'results') refreshOutputs();
     if (btn.dataset.tab === 'qc')      refreshQcAll();
+    if (btn.dataset.tab === 'projects') { loadProjects(); refreshBatchQueue(); }
   };
 });
 
@@ -1521,6 +1606,7 @@ function buildRunPayload() {
       maxPoints: document.getElementById('maxPoints').value,
       minDistance: document.getElementById('minDistance').value,
       ransacResidual: document.getElementById('ransacResidual').value,
+      confidenceThreshold: parseFloat(document.getElementById('confidenceThreshold')?.value || '0') || 0,
       version: versionText.textContent,
     },
   };
@@ -1815,8 +1901,115 @@ async function refreshQcAll() {
       grid.appendChild(wrap);
     });
   } catch { showToast(t('toast.qcLoadFailed'), 'warning'); }
+
+  // Load Z continuity chart
+  refreshZContinuity();
 }
 document.getElementById('refreshQcAllBtn').onclick = refreshQcAll;
+
+// ----------------------------------------------------------------
+// Z-CONTINUITY SVG CHART
+// ----------------------------------------------------------------
+async function refreshZContinuity() {
+  const section = document.getElementById('zContinuitySection');
+  const chartDiv = document.getElementById('zContinuityChart');
+  const summaryDiv = document.getElementById('zContinuitySummary');
+  if (!section || !chartDiv || !summaryDiv) return;
+  try {
+    const r = await fetch(withActiveJobQuery('/api/outputs/z-continuity'));
+    if (!r.ok) { section.style.display = 'none'; return; }
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.slice_ids) || j.slice_ids.length === 0) {
+      section.style.display = 'none'; return;
+    }
+    section.style.display = '';
+    const slices = j.slice_ids;
+    const orig = j.original_z;
+    const smooth = j.smoothed_z;
+    const outliers = j.is_outlier || slices.map(() => false);
+    const outlierCount = j.outlier_count || 0;
+
+    // SVG dimensions
+    const W = Math.max(600, slices.length * 6);
+    const H = 180;
+    const PAD = { t: 16, r: 20, b: 32, l: 48 };
+    const cW = W - PAD.l - PAD.r;
+    const cH = H - PAD.t - PAD.b;
+
+    const allZ = [...orig, ...(smooth || [])].filter(v => v != null);
+    const zMin = Math.min(...allZ);
+    const zMax = Math.max(...allZ);
+    const zRange = zMax - zMin || 1;
+    const xMin = Math.min(...slices);
+    const xMax = Math.max(...slices);
+    const xRange = xMax - xMin || 1;
+
+    const px = s => PAD.l + ((s - xMin) / xRange) * cW;
+    const py = z => PAD.t + (1 - (z - zMin) / zRange) * cH;
+
+    const pts = (arr) => arr.map((z, i) => `${px(slices[i]).toFixed(1)},${py(z).toFixed(1)}`).join(' ');
+
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;max-width:100%">`;
+
+    // Y-axis label
+    svg += `<text x="10" y="${PAD.t + cH/2}" text-anchor="middle" transform="rotate(-90,10,${PAD.t + cH/2})" fill="#888" font-size="11">AP index</text>`;
+
+    // Axes
+    svg += `<line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+    svg += `<line x1="${PAD.l}" y1="${PAD.t+cH}" x2="${PAD.l+cW}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+
+    // Y tick
+    [zMin, Math.round((zMin+zMax)/2), zMax].forEach(v => {
+      const y = py(v);
+      svg += `<line x1="${PAD.l-4}" y1="${y}" x2="${PAD.l}" y2="${y}" stroke="#555"/>`;
+      svg += `<text x="${PAD.l-6}" y="${y+4}" text-anchor="end" fill="#888" font-size="10">${v}</text>`;
+    });
+
+    // X ticks (every ~10 slices)
+    const step = Math.max(1, Math.round(slices.length / 10));
+    slices.filter((_, i) => i % step === 0).forEach(s => {
+      const x = px(s);
+      svg += `<line x1="${x}" y1="${PAD.t+cH}" x2="${x}" y2="${PAD.t+cH+4}" stroke="#555"/>`;
+      svg += `<text x="${x}" y="${PAD.t+cH+15}" text-anchor="middle" fill="#888" font-size="10">${s}</text>`;
+    });
+    svg += `<text x="${PAD.l + cW/2}" y="${H-2}" text-anchor="middle" fill="#888" font-size="11">slice</text>`;
+
+    // Smoothed line (green)
+    if (smooth && smooth.length === slices.length) {
+      svg += `<polyline points="${pts(smooth)}" fill="none" stroke="#4caf50" stroke-width="1.5" opacity="0.85"/>`;
+    }
+    // Original line (blue, thinner)
+    svg += `<polyline points="${pts(orig)}" fill="none" stroke="#5b9bd5" stroke-width="1.5" stroke-dasharray="4 2" opacity="0.7"/>`;
+
+    // Outlier markers (red circles)
+    outliers.forEach((isOut, i) => {
+      if (!isOut) return;
+      const x = px(slices[i]);
+      const y = py(orig[i]);
+      svg += `<circle cx="${x}" cy="${y}" r="4" fill="#e53935" opacity="0.9"/>`;
+    });
+
+    // Legend
+    const lx = PAD.l + cW - 130;
+    const ly = PAD.t + 4;
+    svg += `<line x1="${lx}" y1="${ly+6}" x2="${lx+18}" y2="${ly+6}" stroke="#5b9bd5" stroke-width="1.5" stroke-dasharray="4 2"/>`;
+    svg += `<text x="${lx+22}" y="${ly+10}" fill="#aaa" font-size="10">original</text>`;
+    svg += `<line x1="${lx}" y1="${ly+20}" x2="${lx+18}" y2="${ly+20}" stroke="#4caf50" stroke-width="1.5"/>`;
+    svg += `<text x="${lx+22}" y="${ly+24}" fill="#aaa" font-size="10">smoothed</text>`;
+    svg += `<circle cx="${lx+9}" cy="${ly+34}" r="4" fill="#e53935"/>`;
+    svg += `<text x="${lx+22}" y="${ly+38}" fill="#aaa" font-size="10">outlier</text>`;
+
+    svg += '</svg>';
+    chartDiv.innerHTML = svg;
+
+    // Summary badge
+    if (outlierCount > 0) {
+      summaryDiv.innerHTML = `<span style="background:#b71c1c;color:#fff;padding:3px 10px;border-radius:12px;font-size:0.85em">${t('qc.zContinuityWarn', { n: outlierCount })}</span>`;
+    } else {
+      summaryDiv.innerHTML = `<span style="background:#1b5e20;color:#c8e6c9;padding:3px 10px;border-radius:12px;font-size:0.85em">${t('qc.zContinuityOk')}</span>`;
+    }
+  } catch { section.style.display = 'none'; }
+}
 
 async function regenDemoVisuals() {
   const btn = document.getElementById('regenDemoBtn');
@@ -1875,6 +2068,7 @@ async function refreshOutputs() {
         chartImg.src = withActiveJobQuery('/api/outputs/cell-chart', { ts: Date.now() });
       }
     } catch {}
+    refreshApDensity();
     await refreshDetectionConfidenceSamples();
     compareRows.innerHTML = '';
     for (const ch of ['red', 'green', 'farred']) {
@@ -2037,6 +2231,15 @@ function renderResultsTable(data) {
   const filtered = keyword ? data.filter(d => (d.region_name || d.region || '').toLowerCase().includes(keyword) || (d.acronym || '').toLowerCase().includes(keyword)) : data;
   const rootCount = data.find(d => safeDepth(d.depth) === 0);
   const total = rootCount ? Number(rootCount.count||0) : Math.max(...data.map(d=>Number(d.count||0)));
+
+  // Morphology: check if CSV has these columns
+  const hasMorph = data.length > 0 && (data[0].mean_elongation !== undefined || data[0].mean_area_px !== undefined);
+  const morphToggleLabel = document.getElementById('morphToggleLabel');
+  const morphToggle = document.getElementById('morphToggle');
+  if (morphToggleLabel) morphToggleLabel.style.display = hasMorph ? 'flex' : 'none';
+  const showMorph = hasMorph && morphToggle && morphToggle.checked;
+  document.querySelectorAll('.morph-col').forEach(el => el.style.display = showMorph ? '' : 'none');
+
   filtered.forEach(d => {
     const depth = safeDepth(d.depth);
     const indent = state.useHierarchy && !keyword ? '&nbsp;'.repeat(depth * 3) : '';
@@ -2051,10 +2254,17 @@ function renderResultsTable(data) {
     const bar = (depth >= 2 && depth <= 5 && count > 0)
       ? `<div style="display:inline-block;width:${barWidth}px;height:8px;background:${barColor};border-radius:2px;vertical-align:middle;opacity:0.75"></div>`
       : '';
+    const ciLow = d.ci_low != null ? Number(d.ci_low).toFixed(0) : null;
+    const ciHigh = d.ci_high != null ? Number(d.ci_high).toFixed(0) : null;
+    const ciStr = ciLow != null && ciHigh != null
+      ? `<span style="font-size:0.78em;color:#666">[${ciLow}–${ciHigh}]</span>` : '';
+    const morphCols = showMorph
+      ? `<td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_elongation != null ? Number(d.mean_elongation).toFixed(2) : '—'}</td><td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_area_px != null ? Number(d.mean_area_px).toFixed(0) : '—'}</td><td class="morph-col" style="text-align:right;color:#888;font-size:0.85em">${d.mean_mean_intensity != null ? Number(d.mean_mean_intensity).toFixed(0) : '—'}</td>`
+      : '<td class="morph-col" style="display:none"></td><td class="morph-col" style="display:none"></td><td class="morph-col" style="display:none"></td>';
     const tr = document.createElement('tr');
     if (state.useHierarchy && depth <= 2 && !keyword) tr.style.fontWeight = 'bold';
     if (depth === 0) tr.style.cssText = 'font-weight:bold;background:rgba(255,255,255,0.04)';
-    tr.innerHTML = `<td>${indent}${name}${acronym}</td><td style="text-align:right">${countStr}</td><td style="color:#888;font-size:0.85em">${pct}</td><td>${bar}</td>`;
+    tr.innerHTML = `<td>${indent}${name}${acronym}</td><td style="text-align:right">${countStr}</td><td class="ci-col" style="text-align:right">${ciStr}</td><td style="color:#888;font-size:0.85em">${pct}</td><td>${bar}</td>${morphCols}`;
     resultRows.appendChild(tr);
   });
   const meta = document.getElementById('resultsMeta');
@@ -2066,6 +2276,7 @@ function renderResultsTable(data) {
 }
 
 document.getElementById('regionSearch').addEventListener('input', () => renderResultsTable(state.allResults));
+document.getElementById('morphToggle')?.addEventListener('change', () => renderResultsTable(state.allResults));
 document.getElementById('refreshBtn').onclick = refreshOutputs;
 document.getElementById('exportBtn').onclick   = () => window.open(withActiveJobQuery('/api/outputs/leaf'), '_blank');
 
@@ -3407,6 +3618,70 @@ async function handleOutputFileClick(f) {
 }
 
 document.getElementById('refreshFileListBtn').onclick = refreshFileList;
+
+// ================================================================
+// CROSS-SAMPLE COMPARISON
+// ================================================================
+(function initSampleCompare() {
+  const dirList = document.getElementById('compareDirList');
+  const resultTable = document.getElementById('compareResultTable');
+
+  function addDirRow(dir = '', label = '') {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center';
+    row.innerHTML = `
+      <input class="compare-dir-input" type="text" value="${dir.replace(/"/g,'')}"
+        placeholder="${t('compare.multi.dirPlaceholder')}"
+        style="flex:3;padding:5px 8px;background:#1e1e1e;border:1px solid #333;border-radius:4px;color:#ddd;font-size:0.85em"/>
+      <input class="compare-label-input" type="text" value="${label.replace(/"/g,'')}"
+        placeholder="${t('compare.multi.label')}"
+        style="flex:1;padding:5px 8px;background:#1e1e1e;border:1px solid #333;border-radius:4px;color:#ddd;font-size:0.85em"/>
+      <button class="btn-ghost" style="padding:4px 8px;font-size:0.85em" onclick="this.closest('div').remove()">✕</button>`;
+    dirList.appendChild(row);
+  }
+
+  // Seed with 2 rows
+  addDirRow(); addDirRow();
+
+  document.getElementById('compareAddDirBtn').onclick = () => addDirRow();
+
+  document.getElementById('compareRunBtn').onclick = async () => {
+    const dirs = [...dirList.querySelectorAll('.compare-dir-input')].map(el => el.value.trim()).filter(Boolean);
+    const labels = [...dirList.querySelectorAll('.compare-label-input')].map(el => el.value.trim());
+    if (dirs.length < 2) { showToast(t('compare.multi.empty'), 'warning'); return; }
+
+    resultTable.innerHTML = '<div style="color:#888;padding:12px">Loading...</div>';
+    try {
+      const res = await fetch('/api/compare/regions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ output_dirs: dirs, labels }),
+      }).then(r => r.json());
+
+      if (!res.ok) { resultTable.innerHTML = `<div style="color:#e53935">${res.error || 'Error'}</div>`; return; }
+      const sampleCols = res.sample_labels || dirs.map((_, i) => labels[i] || `Sample ${i + 1}`);
+      const regions = res.regions || [];
+      if (!regions.length) { resultTable.innerHTML = `<div class="empty-hint">${t('compare.multi.noData')}</div>`; return; }
+
+      let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85em"><thead><tr>';
+      html += `<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #333;color:#aaa">Region</th>`;
+      sampleCols.forEach(s => { html += `<th style="text-align:right;padding:6px 8px;border-bottom:1px solid #333;color:#aaa">${s}</th>`; });
+      html += '</tr></thead><tbody>';
+      regions.forEach((row, ri) => {
+        const bg = ri % 2 === 0 ? '' : 'background:rgba(255,255,255,0.02)';
+        html += `<tr style="${bg}"><td style="padding:5px 8px;color:#ccc">${row.region_name || row.region || '-'}</td>`;
+        sampleCols.forEach((_, si) => {
+          const val = row[`count_${si}`] ?? row[sampleCols[si]] ?? '—';
+          html += `<td style="text-align:right;padding:5px 8px;color:#ddd">${typeof val === 'number' ? val.toLocaleString() : val}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      resultTable.innerHTML = html;
+    } catch (err) {
+      resultTable.innerHTML = `<div style="color:#e53935">Request failed: ${err?.message || err}</div>`;
+    }
+  };
+})();
 // Auto-refresh when switching to results tab
 const _origResultsRefresh = refreshOutputs;
 async function refreshOutputsAndFiles() {
@@ -3414,6 +3689,269 @@ async function refreshOutputsAndFiles() {
   await refreshFileList();
 }
 document.getElementById('refreshBtn').onclick = refreshOutputsAndFiles;
+
+// ----------------------------------------------------------------
+// AP-AXIS DENSITY PROFILE CHART
+// ----------------------------------------------------------------
+async function refreshApDensity() {
+  const section = document.getElementById('apDensitySection');
+  const chartDiv = document.getElementById('apDensityChart');
+  if (!section || !chartDiv) return;
+  try {
+    const r = await fetch(withActiveJobQuery('/api/outputs/ap-density'));
+    if (!r.ok) { section.style.display = 'none'; return; }
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.ap_slices) || !j.ap_slices.length) {
+      section.style.display = 'none'; return;
+    }
+    section.style.display = '';
+    const items = j.ap_slices;
+    const maxCount = Math.max(...items.map(d => d.cell_count), 1);
+    const W = Math.max(600, items.length * 8);
+    const H = 160;
+    const PAD = { t: 12, r: 20, b: 36, l: 52 };
+    const cW = W - PAD.l - PAD.r;
+    const cH = H - PAD.t - PAD.b;
+
+    const barW = Math.max(2, cW / items.length - 1);
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;max-width:100%">`;
+
+    // Y-axis label
+    svg += `<text x="10" y="${PAD.t + cH/2}" text-anchor="middle" transform="rotate(-90,10,${PAD.t + cH/2})" fill="#888" font-size="11">cells</text>`;
+
+    // Axes
+    svg += `<line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+    svg += `<line x1="${PAD.l}" y1="${PAD.t+cH}" x2="${PAD.l+cW}" y2="${PAD.t+cH}" stroke="#444" stroke-width="1"/>`;
+
+    // Y ticks
+    [0, Math.round(maxCount/2), maxCount].forEach(v => {
+      const y = PAD.t + cH - (v / maxCount) * cH;
+      svg += `<line x1="${PAD.l-4}" y1="${y}" x2="${PAD.l}" y2="${y}" stroke="#555"/>`;
+      svg += `<text x="${PAD.l-6}" y="${y+4}" text-anchor="end" fill="#888" font-size="10">${v}</text>`;
+    });
+
+    // Bars
+    items.forEach((d, i) => {
+      const x = PAD.l + (i / items.length) * cW;
+      const bh = (d.cell_count / maxCount) * cH;
+      const y = PAD.t + cH - bh;
+      svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="#5b9bd5" opacity="0.8" rx="1"/>`;
+    });
+
+    // X ticks (AP index labels, every ~8 items)
+    const step = Math.max(1, Math.round(items.length / 8));
+    items.filter((_, i) => i % step === 0).forEach((d, _, arr) => {
+      const idx = items.indexOf(d);
+      const x = PAD.l + (idx / items.length) * cW + barW / 2;
+      svg += `<text x="${x.toFixed(1)}" y="${PAD.t+cH+16}" text-anchor="middle" fill="#888" font-size="10">${d.ap_index}</text>`;
+    });
+    svg += `<text x="${PAD.l + cW/2}" y="${H-2}" text-anchor="middle" fill="#888" font-size="11">AP index</text>`;
+
+    svg += '</svg>';
+    chartDiv.innerHTML = svg;
+  } catch { section.style.display = 'none'; }
+}
+
+// ================================================================
+// PROJECTS & BATCH QUEUE
+// ================================================================
+let _batchPollTimer = null;
+
+function _statusBadge(status) {
+  const map = { done: '#2e7d32', running: '#1565c0', queued: '#e65100', pending: '#555', error: '#b71c1c' };
+  const bg = map[status] || '#333';
+  const key = `sample.status.${status}`;
+  return `<span style="background:${bg};color:#fff;padding:2px 8px;border-radius:10px;font-size:0.75em;white-space:nowrap">${t(key) || status}</span>`;
+}
+
+async function loadProjects() {
+  const container = document.getElementById('projectsList');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/projects').then(r => r.json());
+    if (!res.ok || !Array.isArray(res.projects) || !res.projects.length) {
+      container.innerHTML = `<div class="empty-hint">${t('projects.empty')}</div>`;
+      return;
+    }
+    container.innerHTML = '';
+    res.projects.forEach(proj => {
+      const card = document.createElement('div');
+      card.style.cssText = 'border:1px solid #2a2a2a;border-radius:8px;margin-bottom:10px;overflow:hidden';
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#1a1a1a;cursor:pointer" onclick="toggleProjectSamples(this,'${proj.id}')">
+          <div>
+            <strong style="color:#e0e0e0">${proj.name}</strong>
+            ${proj.description ? `<span style="color:#666;font-size:0.85em;margin-left:8px">${proj.description}</span>` : ''}
+          </div>
+          <span style="color:#555;font-size:0.85em">▶</span>
+        </div>
+        <div class="project-samples" id="proj-samples-${proj.id}" style="display:none;padding:10px 14px">
+          <div class="empty-hint" style="padding:6px 0">Loading…</div>
+        </div>
+        <div style="padding:8px 14px;border-top:1px solid #222;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input class="search-input" id="sample-name-${proj.id}" placeholder="${t('sample.namePh')}" style="flex:1;max-width:180px;padding:4px 8px;font-size:0.85em"/>
+          <input class="search-input" id="sample-cfg-${proj.id}" placeholder="${t('sample.configPh')}" style="flex:2;max-width:280px;padding:4px 8px;font-size:0.85em"/>
+          <input class="search-input" id="sample-dir-${proj.id}" placeholder="${t('sample.inputPh')}" style="flex:2;max-width:280px;padding:4px 8px;font-size:0.85em"/>
+          <button class="btn-secondary" style="padding:4px 10px;font-size:0.85em" onclick="addSampleToProject('${proj.id}')">${t('sample.addBtn')}</button>
+        </div>`;
+      container.appendChild(card);
+    });
+  } catch (err) {
+    container.innerHTML = `<div style="color:#e53935">Failed to load projects: ${err?.message || err}</div>`;
+  }
+}
+
+async function toggleProjectSamples(header, projectId) {
+  const panel = document.getElementById(`proj-samples-${projectId}`);
+  if (!panel) return;
+  if (panel.style.display === 'none') {
+    panel.style.display = '';
+    await loadProjectSamples(projectId);
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+async function loadProjectSamples(projectId) {
+  const panel = document.getElementById(`proj-samples-${projectId}`);
+  if (!panel) return;
+  try {
+    const res = await fetch(`/api/projects/${projectId}/samples`).then(r => r.json());
+    if (!res.ok || !Array.isArray(res.samples) || !res.samples.length) {
+      panel.innerHTML = `<div class="empty-hint" style="padding:4px 0">No samples yet.</div>`;
+      return;
+    }
+    panel.innerHTML = '';
+    res.samples.forEach(s => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #1e1e1e;flex-wrap:wrap';
+      row.innerHTML = `
+        <span style="flex:2;color:#ccc;font-size:0.88em">${s.name || s.id}</span>
+        ${_statusBadge(s.status || 'pending')}
+        <span style="flex:3;color:#555;font-size:0.78em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.config_path || ''}">${s.config_path || '—'}</span>
+        <button class="btn-ghost" style="padding:3px 8px;font-size:0.8em" onclick="loadSampleAndRun('${s.config_path || ''}','${s.input_dir || ''}')">
+          ${t('sample.run')}
+        </button>
+        <button class="btn-ghost" style="padding:3px 8px;font-size:0.8em;color:#e53935" onclick="enqueueSample('${s.id}','${s.config_path || ''}','${s.input_dir || ''}')">
+          ${t('batch.enqueue')}
+        </button>`;
+      panel.appendChild(row);
+    });
+  } catch { panel.innerHTML = '<div class="empty-hint" style="padding:4px 0">Load failed.</div>'; }
+}
+
+async function addSampleToProject(projectId) {
+  const name = document.getElementById(`sample-name-${projectId}`)?.value.trim();
+  const cfg = document.getElementById(`sample-cfg-${projectId}`)?.value.trim();
+  const dir = document.getElementById(`sample-dir-${projectId}`)?.value.trim();
+  if (!name || !cfg) { showToast('Sample name and config path required.', 'warning'); return; }
+  try {
+    const res = await fetch(`/api/projects/${projectId}/samples`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, config_path: cfg, input_dir: dir }),
+    }).then(r => r.json());
+    if (res.ok) {
+      showToast('Sample added.', 'success');
+      await loadProjectSamples(projectId);
+    } else {
+      showToast(`Failed: ${res.error || '?'}`, 'error');
+    }
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+function loadSampleAndRun(configPath, inputDir) {
+  if (configPath) {
+    const cfgEl = document.querySelector('[data-field="configPath"]') || document.getElementById('configPathInput');
+    if (cfgEl) cfgEl.value = configPath;
+  }
+  if (inputDir) {
+    const dirEl = document.getElementById('inputDir');
+    if (dirEl) dirEl.value = inputDir;
+  }
+  // Switch to workflow tab
+  document.querySelector('.nav-btn[data-tab="workflow"]')?.click();
+}
+
+async function enqueueSample(sampleId, configPath, inputDir) {
+  try {
+    const res = await fetch('/api/batch/enqueue', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sample_id: sampleId, config_path: configPath, input_dir: inputDir }),
+    }).then(r => r.json());
+    if (res.ok) { showToast('Enqueued.', 'success'); refreshBatchQueue(); }
+    else showToast(`Enqueue failed: ${res.error || '?'}`, 'error');
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+async function refreshBatchQueue() {
+  const container = document.getElementById('batchQueueTable');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/batch/status').then(r => r.json());
+    if (!res.ok) { container.innerHTML = `<div class="empty-hint">${t('batch.empty')}</div>`; return; }
+    const active = res.active;
+    const queued = Array.isArray(res.queued) ? res.queued : [];
+    if (!active && !queued.length) {
+      container.innerHTML = `<div class="empty-hint">${t('batch.empty')}</div>`;
+      clearInterval(_batchPollTimer); _batchPollTimer = null; return;
+    }
+    // Start polling if queue is active
+    if (!_batchPollTimer) {
+      _batchPollTimer = setInterval(() => {
+        if (document.getElementById('tab-projects')?.classList.contains('active')) refreshBatchQueue();
+        else { clearInterval(_batchPollTimer); _batchPollTimer = null; }
+      }, 10000);
+    }
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85em"><thead><tr>';
+    ['Sample', 'Status', 'Queued At', 'Action'].forEach(h => {
+      html += `<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #333;color:#aaa">${h}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    const allItems = active ? [{ ...active, _isActive: true }, ...queued] : queued;
+    allItems.forEach(item => {
+      const cancelBtn = !item._isActive
+        ? `<button class="btn-ghost" style="padding:2px 8px;font-size:0.8em;color:#e53935" onclick="cancelBatchItem('${item.sample_id || item.id}')">${t('batch.cancel')}</button>`
+        : '';
+      html += `<tr><td style="padding:5px 8px;color:#ccc">${item.sample_id || item.id || '—'}</td><td style="padding:5px 8px">${_statusBadge(item.status || (item._isActive ? 'running' : 'queued'))}</td><td style="padding:5px 8px;color:#666;font-size:0.8em">${item.queued_at || item.created_at || '—'}</td><td style="padding:5px 8px">${cancelBtn}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch { container.innerHTML = `<div class="empty-hint">${t('batch.empty')}</div>`; }
+}
+
+async function cancelBatchItem(sampleId) {
+  try {
+    const res = await fetch('/api/batch/cancel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sample_id: sampleId }),
+    }).then(r => r.json());
+    if (res.ok) { showToast('Cancelled.', 'info'); refreshBatchQueue(); }
+    else showToast(`Cancel failed: ${res.error || '?'}`, 'error');
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+async function createProject() {
+  const name = document.getElementById('newProjectName')?.value.trim();
+  const desc = document.getElementById('newProjectDesc')?.value.trim();
+  if (!name) { showToast('Project name required.', 'warning'); return; }
+  try {
+    const res = await fetch('/api/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description: desc }),
+    }).then(r => r.json());
+    if (res.ok) {
+      document.getElementById('newProjectName').value = '';
+      document.getElementById('newProjectDesc').value = '';
+      showToast('Project created.', 'success');
+      await loadProjects();
+    } else {
+      showToast(`Failed: ${res.error || '?'}`, 'error');
+    }
+  } catch (err) { showToast(`Error: ${err?.message}`, 'error'); }
+}
+
+document.getElementById('createProjectBtn')?.addEventListener('click', createProject);
+document.getElementById('refreshProjectsBtn')?.addEventListener('click', () => { loadProjects(); refreshBatchQueue(); });
 
 document.getElementById('pixelSizeUm')?.addEventListener('input', function() {
   this.dataset.userModified = '1';

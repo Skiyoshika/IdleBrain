@@ -452,3 +452,49 @@ def outputs_qc_file(filename: str):
     qc_dir = _outputs_root() / "qc_overlays"
     safe = Path(filename).name
     return send_from_directory(str(qc_dir), safe)
+
+
+@bp.get("/ap-density")
+def outputs_ap_density():
+    """Return per-AP-slice cell count for the AP density chart in the Results tab.
+
+    Merges cell_counts_leaf.csv (has slice_id) with slice_registration_qc.csv
+    (has slice_id → best_z / atlas AP coordinate).
+    """
+    import pandas as pd  # local import — only needed for this route
+
+    outputs_root = _outputs_root()
+    leaf_path = _job_file("cell_counts_leaf.csv")
+    qc_path = _job_file("slice_registration_qc.csv")
+
+    if not leaf_path.exists() or not qc_path.exists():
+        return (
+            jsonify({"ok": False, "error": "Required CSV files not found. Run the pipeline first."}),
+            404,
+        )
+    try:
+        leaf = pd.read_csv(leaf_path)
+        qc = pd.read_csv(qc_path)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"Failed to read CSVs: {exc}"}), 500
+
+    # Identify the AP column — may be named best_z, atlas_z, ap_index, etc.
+    ap_col = next((c for c in ("best_z", "atlas_z", "ap_index", "ap") if c in qc.columns), None)
+    if ap_col is None or "slice_id" not in qc.columns or "slice_id" not in leaf.columns:
+        return (
+            jsonify({"ok": False, "error": "Required columns not found in QC or leaf CSV."}),
+            400,
+        )
+
+    # Aggregate leaf counts by slice_id
+    per_slice = leaf.groupby("slice_id", as_index=False)["count"].sum()
+    # Join with QC to get AP coordinate
+    merged = per_slice.merge(qc[["slice_id", ap_col]].drop_duplicates("slice_id"), on="slice_id", how="left")
+    merged = merged.dropna(subset=[ap_col]).sort_values(ap_col)
+    merged[ap_col] = merged[ap_col].astype(int)
+
+    ap_slices = [
+        {"ap_index": int(row[ap_col]), "slice_id": int(row["slice_id"]), "cell_count": int(row["count"])}
+        for _, row in merged.iterrows()
+    ]
+    return jsonify({"ok": True, "ap_slices": ap_slices, "total_slices": len(ap_slices)})

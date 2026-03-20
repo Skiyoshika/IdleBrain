@@ -77,10 +77,18 @@ def _new_run_state() -> dict:
 _job_states: dict[str, dict] = {DEFAULT_JOB_ID: _new_run_state()}
 
 
+_MAX_JOB_STATES = 200
+
+
 def get_job_state(job_id: str | None = None) -> dict:
     safe_job_id = _sanitize_job_id(job_id)
     state = _job_states.get(safe_job_id)
     if state is None:
+        # BUG-3 fix: evict oldest non-running states before adding a new one
+        if len(_job_states) >= _MAX_JOB_STATES:
+            evictable = [k for k, v in _job_states.items() if not v.get("running") and k != DEFAULT_JOB_ID]
+            for k in evictable[: max(1, len(evictable) - 50)]:
+                del _job_states[k]
         state = _new_run_state()
         state["job_id"] = safe_job_id
         state["outputs_dir"] = str(_job_output_dir(safe_job_id))

@@ -52,17 +52,32 @@ def _read_version_info() -> dict[str, str]:
     }
 
 
+_ALLOWED_CONFIG_ROOTS = lambda: (ctx.PROJECT_ROOT / "configs", ctx.OUTPUT_DIR)
+
+
 def _resolve_config_path(raw_path: str | None) -> Path:
     if not raw_path:
         return ctx.PROJECT_ROOT / "configs" / "run_config.template.json"
     candidate = Path(str(raw_path))
     if candidate.is_absolute():
-        return candidate
-    for base in (ctx.ROOT, ctx.PROJECT_ROOT, Path.cwd()):
-        resolved = (base / candidate).resolve()
-        if resolved.exists():
-            return resolved
-    return (ctx.ROOT / candidate).resolve()
+        resolved = candidate.resolve()
+    else:
+        resolved = None
+        for base in (ctx.ROOT, ctx.PROJECT_ROOT, Path.cwd()):
+            r = (base / candidate).resolve()
+            if r.exists():
+                resolved = r
+                break
+        if resolved is None:
+            resolved = (ctx.ROOT / candidate).resolve()
+    # BUG-2 fix: containment check — only allow configs/ and outputs/ subtrees
+    allowed = _ALLOWED_CONFIG_ROOTS()
+    if not any(resolved.is_relative_to(r) for r in allowed):
+        raise PermissionError(
+            f"Config path '{resolved}' is outside allowed directories. "
+            f"Allowed: {[str(r) for r in allowed]}"
+        )
+    return resolved
 
 
 def _apply_runtime_overrides(base_cfg: dict, payload: dict) -> dict:
@@ -89,6 +104,13 @@ def _apply_runtime_overrides(base_cfg: dict, payload: dict) -> dict:
     align_mode = params.get("alignMode")
     if align_mode not in ("", None):
         reg_cfg["align_mode"] = str(align_mode)
+
+    confidence_threshold = params.get("confidenceThreshold")
+    if confidence_threshold not in ("", None):
+        try:
+            cfg.setdefault("detection", {})["min_score"] = float(confidence_threshold)
+        except Exception:
+            pass
 
     return cfg
 
@@ -241,6 +263,8 @@ def run_pipeline():
 
     try:
         config = str(_materialize_runtime_config(payload, job_id=job_id))
+    except PermissionError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 403
     except Exception as exc:
         return jsonify({"ok": False, "error": f"failed to build runtime config: {exc}"}), 400
     input_dir = payload.get("inputDir", "")
@@ -249,8 +273,11 @@ def run_pipeline():
         channels = [channels]
 
     run_params = payload.get("params", {})
+    # BUG-1 fix: set running=True inside the lock BEFORE starting the thread,
+    # so concurrent requests see the correct state and cannot bypass the 409 check.
     with ctx._run_state_lock:
         job_state["config_path"] = config
+        job_state["running"] = True
     t = threading.Thread(
         target=ctx._runner,
         args=(config, input_dir, channels, run_params),
