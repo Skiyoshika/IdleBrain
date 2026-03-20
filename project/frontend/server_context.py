@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -51,12 +52,21 @@ run_state: dict = {
     "done": False,
     "error": None,
     "logs": [],
+    "errors": [],
     "channels": [],
     "proc": None,
     "current_channel": None,
     "history": [],
     "config_path": None,
     "startEpoch": None,
+    "progress": {
+        "phase": "idle",
+        "stepCurrent": 0,
+        "stepTotal": 0,
+        "slicesDone": 0,
+        "slicesTotal": 0,
+        "message": "",
+    },
 }
 
 _learning_lock = threading.Lock()
@@ -123,6 +133,77 @@ def _append_log(line: str):
     run_state["logs"].append(line.rstrip())
     if len(run_state["logs"]) > 500:
         run_state["logs"] = run_state["logs"][-500:]
+
+
+def _append_error(
+    message: str,
+    *,
+    step: str = "general",
+    recoverable: bool = True,
+    source: str = "backend",
+) -> None:
+    item = {
+        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "message": str(message).strip(),
+        "step": str(step or "general"),
+        "recoverable": bool(recoverable),
+        "source": str(source or "backend"),
+    }
+    run_state["errors"].append(item)
+    if len(run_state["errors"]) > 200:
+        run_state["errors"] = run_state["errors"][-200:]
+
+
+_PROGRESS_RE = re.compile(r"^\[PROGRESS:(?P<meta>[^\]]+)\]\s*(?P<message>.*)$")
+
+
+def _parse_progress_line(line: str) -> dict[str, object] | None:
+    match = _PROGRESS_RE.match(str(line).strip())
+    if not match:
+        return None
+    meta = match.group("meta")
+    payload: dict[str, object] = {"message": match.group("message").strip()}
+    for chunk in meta.split(":"):
+        if "=" not in chunk:
+            continue
+        key, raw = chunk.split("=", 1)
+        key = key.strip()
+        raw = raw.strip()
+        if key in {"step", "slices"} and "/" in raw:
+            cur, total = raw.split("/", 1)
+            try:
+                payload[f"{key}Current"] = int(cur)
+                payload[f"{key}Total"] = int(total)
+            except Exception:
+                continue
+        else:
+            payload[key] = raw
+    return payload
+
+
+def _apply_progress_update(parsed: dict[str, object]) -> None:
+    progress = run_state.setdefault(
+        "progress",
+        {
+            "phase": "idle",
+            "stepCurrent": 0,
+            "stepTotal": 0,
+            "slicesDone": 0,
+            "slicesTotal": 0,
+            "message": "",
+        },
+    )
+    phase = str(parsed.get("phase", progress.get("phase", "idle"))).strip() or "idle"
+    progress["phase"] = phase
+    progress["message"] = str(parsed.get("message", progress.get("message", "")))
+    if "stepCurrent" in parsed:
+        progress["stepCurrent"] = int(parsed["stepCurrent"])
+    if "stepTotal" in parsed:
+        progress["stepTotal"] = int(parsed["stepTotal"])
+    if "slicesCurrent" in parsed:
+        progress["slicesDone"] = int(parsed["slicesCurrent"])
+    if "slicesTotal" in parsed:
+        progress["slicesTotal"] = int(parsed["slicesTotal"])
 
 
 # ---------------------------------------------------------------------------
@@ -561,10 +642,19 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
             "running": True,
             "done": False,
             "error": None,
+            "errors": [],
             "channels": channels,
             "logs": [],
             "startTime": ts,
             "startEpoch": time.time(),
+            "progress": {
+                "phase": "queued",
+                "stepCurrent": 0,
+                "stepTotal": 0,
+                "slicesDone": 0,
+                "slicesTotal": 0,
+                "message": "Queued...",
+            },
         }
     )
 
@@ -607,6 +697,9 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
             run_state["proc"] = p
             assert p.stdout is not None
             for line in p.stdout:
+                parsed = _parse_progress_line(line)
+                if parsed is not None:
+                    _apply_progress_update(parsed)
                 _append_log(line)
             code = p.wait()
             _append_log(f"[exit] channel={ch} code={code}")
@@ -616,9 +709,25 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
                     shutil.copy2(leaf, OUTPUT_DIR / f"cell_counts_leaf_{ch}.csv")
             else:
                 run_state["error"] = f"channel {ch} failed with code {code}"
+                _append_error(
+                    run_state["error"],
+                    step=str(run_state.get("progress", {}).get("phase", "pipeline")),
+                    recoverable=False,
+                )
                 break
 
         run_state["done"] = run_state["error"] is None
+        if run_state["done"]:
+            _apply_progress_update(
+                {
+                    "phase": "done",
+                    "message": "Pipeline completed",
+                    "stepCurrent": run_state.get("progress", {}).get("stepTotal", 0),
+                    "stepTotal": run_state.get("progress", {}).get("stepTotal", 0),
+                    "slicesCurrent": run_state.get("progress", {}).get("slicesTotal", 0),
+                    "slicesTotal": run_state.get("progress", {}).get("slicesTotal", 0),
+                }
+            )
         run_state["history"].append(
             {
                 "channels": channels,
@@ -634,11 +743,18 @@ def _runner(config_path: str, input_dir: str, channels: list[str], run_params=No
         run_state["error"] = f"pipeline crashed: {exc}"
         run_state["done"] = False
         _append_log(f"[crash] {exc}")
+        _append_error(
+            run_state["error"],
+            step=str(run_state.get("progress", {}).get("phase", "pipeline")),
+            recoverable=False,
+        )
     finally:
         run_state["running"] = False
         run_state["proc"] = None
         run_state["current_channel"] = None
         run_state["startEpoch"] = None
+        if run_state.get("error"):
+            run_state.setdefault("progress", {})["phase"] = "error"
 
 
 # ---------------------------------------------------------------------------
@@ -675,6 +791,8 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
     task = _autopick_tasks[token]
 
     def cb(step: int, total: int, msg: str):
+        if task.get("cancel_requested"):
+            raise RuntimeError("cancelled by user")
         task["step"] = step
         task["total"] = total
         task["message"] = msg
@@ -684,6 +802,15 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
     try:
         task["status"] = "running"
         res = autopick_best_z(real_path, annotation_path, out_label, progress_cb=cb, **kwargs)
+        if task.get("cancel_requested"):
+            task.update(
+                {
+                    "status": "cancelled",
+                    "message": "Cancelled by user.",
+                    "_finished_at": time.time(),
+                }
+            )
+            return
         task.update(
             {
                 "status": "done",
@@ -694,6 +821,15 @@ def _run_autopick_worker(token: str, real_path, annotation_path, out_label, kwar
             }
         )
     except Exception as e:
+        if "cancelled by user" in str(e).lower():
+            task.update(
+                {
+                    "status": "cancelled",
+                    "message": "Cancelled by user.",
+                    "_finished_at": time.time(),
+                }
+            )
+            return
         task.update(
             {
                 "status": "error",

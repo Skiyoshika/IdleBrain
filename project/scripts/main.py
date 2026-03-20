@@ -52,6 +52,26 @@ def _validated_int(cfg: dict, dotted_key: str) -> int:
     return int(config_value(cfg, dotted_key))
 
 
+def emit_progress(
+    step_current: int,
+    step_total: int,
+    phase: str,
+    message: str,
+    *,
+    slices_done: int | None = None,
+    slices_total: int | None = None,
+) -> None:
+    parts = [
+        f"step={int(step_current)}/{int(step_total)}",
+        f"phase={str(phase).strip() or 'registration'}",
+    ]
+    if slices_done is not None or slices_total is not None:
+        cur = int(slices_done or 0)
+        total = int(slices_total or 0)
+        parts.append(f"slices={cur}/{total}")
+    print(f"[PROGRESS:{':'.join(parts)}] {message}", flush=True)
+
+
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
@@ -274,6 +294,15 @@ def run_real_input(cfg: dict, input_dir: Path):
     channel_files = _extract_channel_to_tmp(files, ch_dir, ch_idx)
 
     processing_files, sampling = _resolve_processing_files(cfg, channel_files, outputs_dir)
+    total_slices = len(processing_files)
+    emit_progress(
+        1,
+        6,
+        "ap_selection",
+        f"Prepared {total_slices} slice(s) for processing.",
+        slices_done=0,
+        slices_total=total_slices,
+    )
 
     px_um = _validated_float(cfg, "input.pixel_size_um_xy")
     spacing_um = _validated_float(cfg, "input.slice_spacing_um")
@@ -329,6 +358,14 @@ def run_real_input(cfg: dict, input_dir: Path):
     ap_method = str(reg_cfg.get("ap_method", "formula")).lower().strip()
     _deepslice_az: dict[str, int] = {}
     if ap_method in ("deepslice", "deepslice+formula"):
+        emit_progress(
+            2,
+            6,
+            "ap_selection",
+            "Running DeepSlice AP estimation on the full series...",
+            slices_done=0,
+            slices_total=total_slices,
+        )
         try:
             from scripts.atlas_deepslice import predict_ap_series
 
@@ -348,14 +385,38 @@ def run_real_input(cfg: dict, input_dir: Path):
         except Exception as _ds_err:
             print(f"[main] DeepSlice failed ({_ds_err}); falling back to formula")
             _deepslice_az = {}
+    emit_progress(
+        2,
+        6,
+        "ap_selection",
+        "Atlas AP selection is ready.",
+        slices_done=0,
+        slices_total=total_slices,
+    )
 
     detect_rows = []
     mapped_rows = []
     registration_rows = []
     next_id = 1
     for sid, mp in enumerate(processing_files):
+        emit_progress(
+            3,
+            6,
+            "registration",
+            f"Processing slice {sid + 1} / {total_slices}: {Path(mp).name}",
+            slices_done=sid,
+            slices_total=total_slices,
+        )
         det = detect_cells(mp, cfg)
         if det.empty:
+            emit_progress(
+                3,
+                6,
+                "registration",
+                f"Processed slice {sid + 1} / {total_slices}: no detections.",
+                slices_done=sid + 1,
+                slices_total=total_slices,
+            )
             continue
 
         auto_label_path = registration_dir / f"slice_{sid:04d}_auto_label.tif"
@@ -520,6 +581,14 @@ def run_real_input(cfg: dict, input_dir: Path):
             }
         )
         if not reg_ok:
+            emit_progress(
+                3,
+                6,
+                "registration",
+                f"Processed slice {sid + 1} / {total_slices}: registration score below threshold.",
+                slices_done=sid + 1,
+                slices_total=total_slices,
+            )
             continue
 
         det = det.copy()
@@ -558,6 +627,14 @@ def run_real_input(cfg: dict, input_dir: Path):
                 ),
             )
         )
+        emit_progress(
+            3,
+            6,
+            "registration",
+            f"Processed slice {sid + 1} / {total_slices}.",
+            slices_done=sid + 1,
+            slices_total=total_slices,
+        )
 
     registration_qc_path = outputs_dir / "slice_registration_qc.csv"
     pd.DataFrame(registration_rows).to_csv(registration_qc_path, index=False)
@@ -569,6 +646,14 @@ def run_real_input(cfg: dict, input_dir: Path):
             f"see {registration_qc_path}"
         )
 
+    emit_progress(
+        4,
+        6,
+        "detection",
+        "Finalizing cell detections...",
+        slices_done=total_slices,
+        slices_total=total_slices,
+    )
     if not detect_rows:
         empty = pd.DataFrame(
             columns=[
@@ -587,6 +672,14 @@ def run_real_input(cfg: dict, input_dir: Path):
         empty.to_csv(outputs_dir / "cells_detected.csv", index=False)
         _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=empty)
         print("No detections found in real-input run.")
+        emit_progress(
+            6,
+            6,
+            "done",
+            "No detections found. Pipeline completed.",
+            slices_done=total_slices,
+            slices_total=total_slices,
+        )
         return
 
     if not mapped_rows:
@@ -594,12 +687,28 @@ def run_real_input(cfg: dict, input_dir: Path):
         cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
         _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells)
         print("Detections found, but none could be mapped after registration.")
+        emit_progress(
+            6,
+            6,
+            "done",
+            "Detections found, but nothing could be mapped after registration.",
+            slices_done=total_slices,
+            slices_total=total_slices,
+        )
         return
 
     cells = pd.concat(detect_rows, ignore_index=True)
     cells.to_csv(outputs_dir / "cells_detected.csv", index=False)
     mapped = pd.concat(mapped_rows, ignore_index=True)
 
+    emit_progress(
+        5,
+        6,
+        "dedup",
+        "Deduplicating detected cells across slices...",
+        slices_done=total_slices,
+        slices_total=total_slices,
+    )
     deduped, stats = apply_dedup_kdtree(
         mapped,
         neighbor_slices=neighbor,
@@ -612,6 +721,14 @@ def run_real_input(cfg: dict, input_dir: Path):
     _write_detection_summary(outputs_dir, sampling=sampling, cfg=cfg, detections=cells, deduped=deduped)
 
     deduped.to_csv(outputs_dir / "cells_mapped.csv", index=False)
+    emit_progress(
+        6,
+        6,
+        "mapping",
+        "Mapping cells to brain regions and writing outputs...",
+        slices_done=total_slices,
+        slices_total=total_slices,
+    )
     leaf, hierarchy = aggregate_by_region(deduped)
     write_outputs(leaf, hierarchy, outputs_dir)
 
@@ -631,6 +748,14 @@ def run_real_input(cfg: dict, input_dir: Path):
 
     print(
         f"Real-input end-to-end complete: detected={len(cells)}, dedup={len(deduped)} -> outputs/cell_counts_leaf.csv + QC"
+    )
+    emit_progress(
+        6,
+        6,
+        "done",
+        "Pipeline completed successfully.",
+        slices_done=total_slices,
+        slices_total=total_slices,
     )
 
     # Auto-regenerate demo visuals (panel, annotated slice, chart) after pipeline completes

@@ -44,6 +44,7 @@ def atlas_autopick_z():
         "result": None,
         "error": None,
         "jobId": job_id,
+        "cancel_requested": False,
     }
 
     kwargs = dict(
@@ -80,6 +81,20 @@ def atlas_autopick_z_status():
     }
     if task["status"] == "done":
         resp["result"] = task["result"]
+    if task["status"] == "cancelled":
+        resp["cancelled"] = True
     if task["status"] == "error":
         resp["error"] = task["error"]
     return jsonify(resp)
+
+
+@bp.post("/autopick/cancel")
+def atlas_autopick_cancel():
+    payload = request.get_json(force=True) or {}
+    token = str(payload.get("token", "")).strip()
+    if not token or token not in ctx._autopick_tasks:
+        return jsonify({"ok": False, "error": "unknown token"}), 404
+    task = ctx._autopick_tasks[token]
+    task["cancel_requested"] = True
+    task["message"] = "Cancelling..."
+    return jsonify({"ok": True, "token": token, "cancelled": True})

@@ -19,6 +19,22 @@ const LANGS = {
     'status.idle': 'Idle',
     'status.running': 'Running...',
     'status.error': 'Error',
+    'errorPanel.title': 'Errors',
+    'errorPanel.empty': 'No errors recorded.',
+    'preflight.title': 'Preflight Check',
+    'preflight.desc.warn': 'Review the structured issues below before starting the pipeline.',
+    'preflight.desc.error': 'Fix the blocking issues below before starting the pipeline.',
+    'preflight.back': 'Back',
+    'preflight.continue': 'Continue Anyway',
+    'progress.phase.queued': 'Queued',
+    'progress.phase.ap_selection': 'AP Selection',
+    'progress.phase.registration': 'Registration',
+    'progress.phase.detection': 'Detection',
+    'progress.phase.dedup': 'Deduplication',
+    'progress.phase.mapping': 'Mapping',
+    'progress.phase.done': 'Done',
+    'progress.phase.error': 'Error',
+    'progress.phase.cancelled': 'Cancelled',
     'btn.guide': '📖 Guide',
     'btn.run': '▶ Run Pipeline',
     'btn.cancel': '✕ Cancel',
@@ -276,6 +292,22 @@ const LANGS = {
     'status.idle': '空闲',
     'status.running': '运行中...',
     'status.error': '错误',
+    'errorPanel.title': '错误面板',
+    'errorPanel.empty': '当前没有记录到错误。',
+    'preflight.title': '运行前检查',
+    'preflight.desc.warn': '运行前请先检查下面这些结构化提示。',
+    'preflight.desc.error': '下面这些阻断问题需要先修复，才能开始运行。',
+    'preflight.back': '返回修改',
+    'preflight.continue': '仍然继续',
+    'progress.phase.queued': '已排队',
+    'progress.phase.ap_selection': 'AP选层',
+    'progress.phase.registration': '配准',
+    'progress.phase.detection': '检测',
+    'progress.phase.dedup': '去重',
+    'progress.phase.mapping': '映射',
+    'progress.phase.done': '完成',
+    'progress.phase.error': '错误',
+    'progress.phase.cancelled': '已取消',
     'btn.guide': '📖 使用指南',
     'btn.run': '▶ 运行流水线',
     'btn.cancel': '✕ 取消',
@@ -592,6 +624,17 @@ const quickExportBtn = document.getElementById('quickExportBtn');
 const quickExportFormatEl = document.getElementById('quickExportFormat');
 const methodsModalTitleEl = document.getElementById('methodsModalTitle');
 const methodsModalDescEl = document.getElementById('methodsModalDesc');
+const errorPanelToggle = document.getElementById('errorPanelToggle');
+const errorPanelBody = document.getElementById('errorPanelBody');
+const errorPanelList = document.getElementById('errorPanelList');
+const errorPanelEmpty = document.getElementById('errorPanelEmpty');
+const errorBadge = document.getElementById('errorBadge');
+const preflightModal = document.getElementById('preflightModal');
+const preflightModalTitle = document.getElementById('preflightModalTitle');
+const preflightModalDesc = document.getElementById('preflightModalDesc');
+const preflightIssuesEl = document.getElementById('preflightIssues');
+const preflightContinueBtn = document.getElementById('preflightContinueBtn');
+const preflightCancelBtn = document.getElementById('preflightCancelBtn');
 
 const state = {
   running: false,
@@ -601,11 +644,24 @@ const state = {
   cellSummary: null,
   useHierarchy: false,
   startEpoch: null,
+  backendErrors: [],
+  frontendErrors: [],
 };
 
 const overlayJobState = {
   jobId: localStorage.getItem('idlebrain.overlayJobId') || '',
 };
+
+state.frontendErrors = loadFrontendErrors();
+renderErrorPanel();
+
+if (errorPanelToggle) {
+  errorPanelToggle.onclick = () => {
+    const willOpen = errorPanelBody?.classList.contains('hidden');
+    errorPanelBody?.classList.toggle('hidden');
+    errorPanelToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  };
+}
 
 function buildOverlayJobId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -641,23 +697,142 @@ function withOverlayJobQuery(path, extra = {}) {
 // ================================================================
 // TOAST
 // ================================================================
+const FIELD_ERROR_MAP = {
+  inputDir: 'inputDirError',
+  atlasPath: 'atlasPathError',
+  structPath: 'structPathError',
+};
+const FIELD_INPUT_MAP = {
+  inputDir: 'inputDir',
+  atlasPath: 'atlasPath',
+  structPath: 'structPath',
+};
+const FRONTEND_ERRORS_KEY = 'brainfast.frontendErrors';
+
+function loadFrontendErrors() {
+  try {
+    const raw = sessionStorage.getItem(FRONTEND_ERRORS_KEY);
+    const items = raw ? JSON.parse(raw) : [];
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistFrontendErrors() {
+  try {
+    sessionStorage.setItem(
+      FRONTEND_ERRORS_KEY,
+      JSON.stringify((state.frontendErrors || []).slice(-50)),
+    );
+  } catch {}
+}
+
+function normalizeFieldKey(field) {
+  const raw = String(field || '').trim();
+  if (!raw) return '';
+  const map = {
+    'input.slice_dir': 'inputDir',
+    'inputDir': 'inputDir',
+    'atlasPath': 'atlasPath',
+    'structPath': 'structPath',
+  };
+  return map[raw] || raw;
+}
+
+function renderFieldIssues(issues = []) {
+  const byField = new Map();
+  (issues || []).forEach(issue => {
+    const field = normalizeFieldKey(issue?.field);
+    if (!field || byField.has(field)) return;
+    byField.set(field, String(issue?.message || '').trim());
+  });
+  Object.entries(FIELD_ERROR_MAP).forEach(([field, errorId]) => {
+    const errorEl = document.getElementById(errorId);
+    const inputEl = document.getElementById(FIELD_INPUT_MAP[field] || field);
+    const msg = byField.get(field) || '';
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.classList.toggle('hidden', !msg);
+    }
+    if (inputEl) inputEl.classList.toggle('field-input-error', !!msg);
+  });
+}
+
+function renderErrorPanel() {
+  const merged = [...(state.backendErrors || []), ...(state.frontendErrors || [])]
+    .filter(item => item && item.message)
+    .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+  if (errorPanelList) {
+    errorPanelList.innerHTML = merged
+      .map(item => {
+        const step = escapeHtml(item.step || 'general');
+        const ts = escapeHtml(item.timestamp || '');
+        const message = escapeHtml(item.message || '');
+        const source = escapeHtml(item.source || 'backend');
+        const recoverable = item.recoverable === false ? 'blocking' : 'recoverable';
+        return `
+          <div class="error-item">
+            <div class="error-item-header">
+              <span class="error-item-step">${step}</span>
+              <span class="error-item-time">${ts}</span>
+            </div>
+            <div class="error-item-message">${message}</div>
+            <div class="error-item-source">${source} · ${recoverable}</div>
+          </div>
+        `;
+      })
+      .join('');
+  }
+  if (errorPanelEmpty) errorPanelEmpty.classList.toggle('hidden', merged.length > 0);
+  if (errorBadge) {
+    errorBadge.textContent = String(merged.length);
+    errorBadge.classList.toggle('hidden', merged.length <= 0);
+  }
+}
+
+function pushPersistentError(message, opts = {}) {
+  const item = {
+    timestamp: new Date().toISOString(),
+    message: String(message || '').trim(),
+    step: String(opts.step || 'ui'),
+    recoverable: opts.recoverable !== false,
+    source: String(opts.source || 'frontend'),
+  };
+  if (!item.message) return;
+  state.frontendErrors = [...(state.frontendErrors || []), item].slice(-50);
+  persistFrontendErrors();
+  renderErrorPanel();
+  if (errorPanelBody) {
+    errorPanelBody.classList.remove('hidden');
+    errorPanelToggle?.setAttribute('aria-expanded', 'true');
+  }
+  if (!state.running && statusBadge) {
+    statusBadge.textContent = t('status.error');
+    statusBadge.className = 'status-badge error';
+  }
+}
+
+async function refreshErrorLog() {
+  try {
+    const res = await fetch('/api/error-log').then(r => r.json());
+    state.backendErrors = Array.isArray(res?.errors) ? res.errors : [];
+    renderErrorPanel();
+  } catch {}
+}
+
 function showToast(msg, type = 'info', duration = 4500) {
+  if (type === 'error') {
+    pushPersistentError(msg, { step: 'ui', source: 'frontend', recoverable: true });
+    return;
+  }
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
     const icons = { success: 'OK', warning: 'WARN', error: 'ERR', info: 'i' };
     toast.innerHTML = `<span class="toast-icon">${icons[type] || 'i'}</span><span class="toast-msg">${msg}</span>`;
-  if (type === 'error') {
-    const cb = document.createElement('button');
-    cb.className = 'toast-close';
-        cb.textContent = 'x';
-    cb.onclick = () => toast.remove();
-    toast.appendChild(cb);
-  }
   container.appendChild(toast);
-  if (type !== 'error') {
-    setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 380); }, duration);
-  }
+  setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 380); }, duration);
 }
 
 // ================================================================
@@ -827,6 +1002,7 @@ async function validatePaths(showMsg = true) {
   });
   try {
     const res = await fetch(`/api/validate?${q}`).then(r => r.json());
+    renderFieldIssues(res.fieldIssues || []);
     if (!res.ok) {
       const issues = res.issues.join('; ');
       validateStatus.textContent = t('toast.validateFail', { issues });
@@ -837,6 +1013,7 @@ async function validatePaths(showMsg = true) {
     } else {
       validateStatus.textContent = t('toast.validateOk');
       validateStatus.className = 'validate-status';
+       renderFieldIssues([]);
       if (!state.running) { statusBadge.textContent = t('status.idle'); statusBadge.className = 'status-badge'; }
     }
     return res.ok;
@@ -961,6 +1138,7 @@ document.getElementById('refreshPreviewBtn').onclick = refreshOverlayPreview;
 // ================================================================
 let _autopickAbortFlag = false;
 let _modalCloseTimer = null;
+let _autopickToken = '';
 
 function _showAutopickModal() {
   const modal = document.getElementById('autopickModal');
@@ -976,9 +1154,11 @@ function _showAutopickModal() {
   document.getElementById('autopickProgressMsg').textContent = 'Starting...';
   document.getElementById('autopickStepText').textContent = '';
   document.getElementById('autopickErrorDetail').classList.add('hidden');
+  document.getElementById('autopickModalActions').style.display = 'flex';
   document.getElementById('autopickModalFooter').classList.add('hidden');
   document.getElementById('autopickModalFooter').style.display = 'none';
   _autopickAbortFlag = false;
+  _autopickToken = '';
   const closeBtn = document.getElementById('autopickModalClose');
   if (closeBtn) closeBtn.onclick = () => {
     _autopickAbortFlag = true;
@@ -1025,9 +1205,27 @@ function _showAutopickError(errMsg) {
     detailEl.textContent = errMsg || 'Unknown error';
     detailEl.classList.remove('hidden');
   }
+  const actions = document.getElementById('autopickModalActions');
+  if (actions) actions.style.display = 'none';
   const footer = document.getElementById('autopickModalFooter');
   if (footer) { footer.classList.remove('hidden'); footer.style.display = 'flex'; }
 }
+
+document.getElementById('autopickModalCancel').onclick = async () => {
+  _autopickAbortFlag = true;
+  const msgEl = document.getElementById('autopickProgressMsg');
+  if (msgEl) msgEl.textContent = 'Cancelling...';
+  if (_autopickToken) {
+    try {
+      await fetch('/api/atlas/autopick/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: _autopickToken }),
+      });
+    } catch {}
+  }
+  _scheduleCloseModal(300);
+};
 
 async function _runAutopickAsync(payload) {
   _showAutopickModal();
@@ -1062,6 +1260,7 @@ async function _runAutopickAsync(payload) {
     _showAutopickError('No progress token returned from server');
     return null;
   }
+  _autopickToken = token;
 
   // Poll for progress
   while (!_autopickAbortFlag) {
@@ -1084,6 +1283,11 @@ async function _runAutopickAsync(payload) {
       _scheduleCloseModal(900);
       return { ok: true, jobId: status.jobId, ...status.result };
     }
+    if (status.status === 'cancelled') {
+      showToast('Auto-pick cancelled.', 'warning', 2500);
+      _scheduleCloseModal(300);
+      return null;
+    }
     if (status.status === 'error') {
       _showAutopickError(status.error || 'Unknown error during autopick');
       return null;
@@ -1094,6 +1298,7 @@ async function _runAutopickAsync(payload) {
 
 async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
   _showAutopickModal();
+  document.getElementById('autopickModalActions').style.display = 'none';
   // Update modal title
   const h2 = document.querySelector('#autopickModal h2') || document.querySelector('#autopickModal .modal-title');
   if (h2) h2.textContent = modalTitle || '🧠 Processing...';
@@ -1121,6 +1326,7 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
     return startRes;
   }
   const token = startRes.token;
+  _autopickToken = token;
   while (!_autopickAbortFlag) {
     await new Promise(r => setTimeout(r, 700));
     let status;
@@ -1136,6 +1342,11 @@ async function _runWithProgress(postUrl, statusUrl, payload, modalTitle) {
       if (status.jobId) syncOverlayJobId({ jobId: status.jobId });
       _scheduleCloseModal(700);
       return { ok: true, ...status };
+    }
+    if (status.status === 'cancelled') {
+      showToast('Task cancelled.', 'warning', 2500);
+      _scheduleCloseModal(300);
+      return null;
     }
     if (status.status === 'error') {
       _showAutopickError(status.error || 'Unknown error');
@@ -1269,42 +1480,135 @@ document.getElementById('landmarkViewBtn').onclick = async () => {
 };
 
 // ================================================================
+// RUN PAYLOAD / PREFLIGHT
+// ================================================================
+function buildRunPayload() {
+  const channels = state.runAll ? ['red', 'green', 'farred'] : [state.channel];
+  return {
+    configPath: '../configs/run_config.template.json',
+    inputDir: document.getElementById('inputDir').value,
+    outputDir: document.getElementById('outputDir').value,
+    atlasPath: document.getElementById('atlasPath').value,
+    structPath: document.getElementById('structPath').value,
+    channels,
+    params: {
+      inputDir: document.getElementById('inputDir').value,
+      outputDir: document.getElementById('outputDir').value,
+      atlasPath: document.getElementById('atlasPath').value,
+      structPath: document.getElementById('structPath').value,
+      realSlicePath: document.getElementById('realSlicePath').value,
+      pixelSizeUm: document.getElementById('pixelSizeUm').value,
+      slicingPlane: document.getElementById('slicingPlane').value,
+      rotateAtlas: document.getElementById('rotateAtlas').value,
+      flipAtlas: document.getElementById('flipAtlas').value,
+      alignMode: document.getElementById('alignMode').value,
+      maxPoints: document.getElementById('maxPoints').value,
+      minDistance: document.getElementById('minDistance').value,
+      ransacResidual: document.getElementById('ransacResidual').value,
+      version: versionText.textContent,
+    },
+  };
+}
+
+function phaseLabel(phase) {
+  const key = `progress.phase.${String(phase || '').trim()}`;
+  const translated = t(key);
+  return translated === key ? String(phase || 'running') : translated;
+}
+
+function computeRunProgress(status) {
+  const progress = status?.progress || {};
+  const stepCurrent = Math.max(0, Number(progress.stepCurrent || 0));
+  const stepTotal = Math.max(0, Number(progress.stepTotal || 0));
+  const slicesDone = Math.max(0, Number(status?.slicesDone || 0));
+  const slicesTotal = Math.max(0, Number(status?.slicesTotal || 0));
+  if (stepCurrent <= 0 || stepTotal <= 0) {
+    if (slicesTotal > 0) return Math.min(96, 20 + Math.round((slicesDone / slicesTotal) * 70));
+    return Math.min(94, 20 + Math.floor((status?.logCount || 0) * 0.6));
+  }
+  const completedSteps = Math.max(0, stepCurrent - 1);
+  const sliceFraction = slicesTotal > 0 && progress.phase === 'registration'
+    ? (slicesDone / slicesTotal)
+    : 0;
+  const pct = ((completedSteps + sliceFraction) / stepTotal) * 100;
+  return Math.max(5, Math.min(progress.phase === 'done' ? 100 : 98, Math.round(pct)));
+}
+
+function showPreflightModal(issues = []) {
+  return new Promise(resolve => {
+    const hasBlocking = (issues || []).some(item => item?.severity === 'error');
+    preflightModalTitle.textContent = t('preflight.title');
+    preflightModalDesc.textContent = hasBlocking ? t('preflight.desc.error') : t('preflight.desc.warn');
+    preflightIssuesEl.innerHTML = (issues || [])
+      .map(item => {
+        const severity = String(item?.severity || 'warning').toLowerCase();
+        const field = escapeHtml(item?.field || 'general');
+        const message = escapeHtml(item?.message || '');
+        return `
+          <div class="preflight-issue ${escapeHtml(severity)}">
+            <div class="preflight-issue-header">
+              <span class="preflight-issue-badge">${escapeHtml(severity)}</span>
+              <span class="preflight-issue-field">${field}</span>
+            </div>
+            <div class="preflight-issue-message">${message}</div>
+          </div>
+        `;
+      })
+      .join('');
+    preflightContinueBtn.classList.toggle('hidden', hasBlocking);
+    preflightModal.classList.remove('hidden');
+
+    const close = result => {
+      preflightModal.classList.add('hidden');
+      preflightContinueBtn.onclick = null;
+      preflightCancelBtn.onclick = null;
+      document.getElementById('preflightModalClose').onclick = null;
+      resolve(result);
+    };
+
+    preflightContinueBtn.onclick = () => close(true);
+    preflightCancelBtn.onclick = () => close(false);
+    document.getElementById('preflightModalClose').onclick = () => close(false);
+  });
+}
+
+async function runPreflightGate(payload) {
+  try {
+    const res = await fetch('/api/pipeline/preflight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+    const issues = Array.isArray(res?.issues) ? res.issues : [];
+    if (!issues.length) return true;
+    return await showPreflightModal(issues);
+  } catch (err) {
+    showToast(`Preflight failed: ${err?.message || err || '?'}`, 'error');
+    return false;
+  }
+}
+
+// ================================================================
 // RUN PIPELINE
 // ================================================================
 document.getElementById('runBtn').onclick = async () => {
   if (state.running) return;
   if (!(await validatePaths(true))) return;
+  const payload = buildRunPayload();
+  if (!(await runPreflightGate(payload))) return;
   setRunning(true);
   setProgress(5, t('progress.queued'));
-  const channels = state.runAll ? ['red', 'green', 'farred'] : [state.channel];
-  const params = {
-    inputDir: document.getElementById('inputDir').value,
-    outputDir: document.getElementById('outputDir').value,
-    atlasPath: document.getElementById('atlasPath').value,
-    structPath: document.getElementById('structPath').value,
-    realSlicePath: document.getElementById('realSlicePath').value,
-    pixelSizeUm: document.getElementById('pixelSizeUm').value,
-    slicingPlane: document.getElementById('slicingPlane').value,
-    rotateAtlas: document.getElementById('rotateAtlas').value,
-    flipAtlas: document.getElementById('flipAtlas').value,
-    alignMode: document.getElementById('alignMode').value,
-    maxPoints: document.getElementById('maxPoints').value,
-    minDistance: document.getElementById('minDistance').value,
-    ransacResidual: document.getElementById('ransacResidual').value,
-    version: versionText.textContent,
-  };
   const res = await fetch('/api/run', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ configPath: '../configs/run_config.template.json',
-      inputDir: document.getElementById('inputDir').value, channels, params }),
+    body: JSON.stringify(payload),
   }).then(r => r.json());
   if (!res.ok) {
     showToast(t('toast.runFailed', { err: res.error || '?' }), 'error');
     setRunning(false); setProgress(0, t('progress.startFailed')); return;
   }
   state.startEpoch = Math.floor(Date.now() / 1000);
-  setProgress(20, t('progress.running', { ch: channels.join(' + ') }));
-  showToast(t('toast.runStarted', { channels: channels.join(' + ') }), 'info', 5000);
+  setProgress(20, t('progress.running', { ch: payload.channels.join(' + ') }));
+  showToast(t('toast.runStarted', { channels: payload.channels.join(' + ') }), 'info', 5000);
   await pollLogsUntilDone();
   setProgress(100, t('progress.done'));
   await refreshOutputs();
@@ -1321,6 +1625,7 @@ async function pollLogsUntilDone() {
       fetch('/api/status').then(r => r.json()),
       fetch('/api/logs').then(r => r.json()),
     ]);
+    refreshErrorLog();
     
     // 保护前端的开发者日志不被后端的流水线日志覆盖
     const feLogs = logBox.textContent.split('\n').filter(l => l.includes('❌') || l.includes('⚠️') || l.includes('[ready]'));
@@ -1333,20 +1638,20 @@ async function pollLogsUntilDone() {
     _updateSliceProgressBar(s.slicesDone || 0, s.slicesTotal || 0);
 
     if (s.running) {
-      const lastLines = logsData.logs.slice(-10).join('\n');
-      const m = lastLines.match(/slices?\s+(\d+)\s*[\/／]\s*(\d+)/i);
-      if (m) {
-        const cur = Number(m[1]), total = Number(m[2]);
-        const etaSeconds = getRunEtaSeconds(s);
+      const cur = Number(s.slicesDone || 0);
+      const total = Number(s.slicesTotal || 0);
+      const etaSeconds = getRunEtaSeconds(s);
+      const phase = phaseLabel(s.progress?.phase || 'running');
+      const detail = String(s.progress?.message || '').trim() || t('progress.running', { ch: s.currentChannel || '' });
+      if (total > 0) {
         sliceProgress.classList.remove('hidden');
         sliceProgress.textContent = etaSeconds != null
           ? t('progress.slicesEta', { cur, total, eta: formatEtaSeconds(etaSeconds) })
           : t('progress.slices', { cur, total });
-        setProgress(20 + Math.round((cur / total) * 75), t('progress.running', { ch: s.currentChannel || '' }));
       } else {
-        setProgress(Math.min(94, 20 + Math.floor((s.logCount || 0) * 0.6)), t('progress.running', { ch: s.currentChannel || '' }));
         sliceProgress.classList.add('hidden');
       }
+      setProgress(computeRunProgress(s), `${phase} · ${detail}`);
     }
     if (!s.running) {
       state.startEpoch = null;
@@ -2091,6 +2396,8 @@ async function _pollSliceProgress() {
 // Check on load + every 30s
 _pollSliceProgress();
 setInterval(_pollSliceProgress, 30000);
+refreshErrorLog();
+setInterval(refreshErrorLog, 5000);
 
 // ================================================================
 async function init() {

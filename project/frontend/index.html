@@ -52,6 +52,9 @@
       <span id="autopickPct">0%</span>
     </div>
     <div id="autopickErrorDetail" class="hidden" style="margin-top:12px;padding:10px;background:#2d1515;color:#f87171;font-size:12px;border-radius:4px;word-break:break-all;white-space:pre-wrap;"></div>
+    <div id="autopickModalActions" style="margin-top:14px;display:flex;justify-content:flex-end;">
+      <button class="btn-secondary" id="autopickModalCancel" type="button">Cancel</button>
+    </div>
     <div id="autopickModalFooter" class="hidden" style="margin-top:14px;display:flex;justify-content:flex-end;">
       <button class="btn-secondary" id="autopickModalClose">Close</button>
     </div>
@@ -68,6 +71,22 @@
     <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn-secondary" id="methodsCopyBtn" data-i18n="btn.copy">📋 Copy to Clipboard</button>
       <button class="btn-primary"   id="methodsModalClose2" data-i18n="btn.close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Preflight modal ===== -->
+<div id="preflightModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:680px;">
+    <button class="modal-close-btn" id="preflightModalClose" type="button" aria-label="Close preflight">&times;</button>
+    <h2 id="preflightModalTitle" data-i18n="preflight.title">Preflight Check</h2>
+    <p id="preflightModalDesc" style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px;" data-i18n="preflight.desc.warn">
+      Review the structured issues below before starting the pipeline.
+    </p>
+    <div id="preflightIssues" class="preflight-issues"></div>
+    <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn-secondary" id="preflightCancelBtn" type="button" data-i18n="preflight.back">Back</button>
+      <button class="btn-primary" id="preflightContinueBtn" type="button" data-i18n="preflight.continue">Continue Anyway</button>
     </div>
   </div>
 </div>
@@ -95,6 +114,16 @@
       </button>
     </nav>
     <div class="sidebar-footer">
+      <div id="errorPanel" class="error-panel">
+        <button id="errorPanelToggle" class="error-panel-toggle" type="button" aria-expanded="false">
+          <span data-i18n="errorPanel.title">Errors</span>
+          <span id="errorBadge" class="error-badge hidden">0</span>
+        </button>
+        <div id="errorPanelBody" class="error-panel-body hidden">
+          <div id="errorPanelEmpty" class="error-panel-empty" data-i18n="errorPanel.empty">No errors recorded.</div>
+          <div id="errorPanelList" class="error-panel-list"></div>
+        </div>
+      </div>
       <!-- Pipeline slice progress bar -->
       <div id="sliceProgressWrap" style="display:none;padding:6px 10px 2px;border-top:1px solid rgba(255,255,255,0.07)">
         <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#aaa;margin-bottom:3px">
@@ -187,6 +216,7 @@
               <input id="inputDir" placeholder="D:\data\merged_tiff" />
               <button class="btn-browse" data-target="inputDir" data-type="folder" data-i18n="btn.browse">Browse</button>
             </div>
+            <span id="inputDirError" class="field-error hidden"></span>
           </label>
           <label class="field-label">
             <span data-i18n="label.outputDir">Output Folder</span>
@@ -201,6 +231,7 @@
               <input id="atlasPath" placeholder="D:\...\annotation_25.nii.gz" />
               <button class="btn-browse" data-target="atlasPath" data-type="file" data-filetypes="gz,nii" data-i18n="btn.browse">Browse</button>
             </div>
+            <span id="atlasPathError" class="field-error hidden"></span>
           </label>
           <label class="field-label">
             <span><span data-i18n="label.structPath">Brain Region Mapping File (CSV/JSON)</span> <em class="required" data-i18n="required">Required</em></span>
@@ -208,6 +239,7 @@
               <input id="structPath" placeholder="D:\...\allen_mouse_structure_graph.csv" />
               <button class="btn-browse" data-target="structPath" data-type="file" data-filetypes="csv,json" data-i18n="btn.browse">Browse</button>
             </div>
+            <span id="structPathError" class="field-error hidden"></span>
           </label>
           <label class="field-label">
             <span data-i18n="label.realSlicePath">Single Real Slice (preview / registration)</span>

@@ -4,13 +4,116 @@ from __future__ import annotations
 
 import json
 import threading
+from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_from_directory
 
 import project.frontend.server_context as ctx
+from project.scripts.config_validation import collect_runtime_config_issues, load_config
 
 bp = Blueprint("api_pipeline", __name__)
+
+
+def _resolve_config_path(raw_path: str | None) -> Path:
+    if not raw_path:
+        return ctx.PROJECT_ROOT / "configs" / "run_config.template.json"
+    candidate = Path(str(raw_path))
+    if candidate.is_absolute():
+        return candidate
+    for base in (ctx.ROOT, ctx.PROJECT_ROOT, Path.cwd()):
+        resolved = (base / candidate).resolve()
+        if resolved.exists():
+            return resolved
+    return (ctx.ROOT / candidate).resolve()
+
+
+def _apply_runtime_overrides(base_cfg: dict, payload: dict) -> dict:
+    cfg = deepcopy(base_cfg)
+    params = payload.get("params", {}) if isinstance(payload.get("params"), dict) else {}
+    input_cfg = cfg.setdefault("input", {})
+    reg_cfg = cfg.setdefault("registration", {})
+
+    input_dir = str(payload.get("inputDir", "")).strip()
+    if input_dir:
+        input_cfg["slice_dir"] = input_dir
+
+    pixel_size = params.get("pixelSizeUm")
+    if pixel_size not in ("", None):
+        try:
+            input_cfg["pixel_size_um_xy"] = float(pixel_size)
+        except Exception:
+            input_cfg["pixel_size_um_xy"] = pixel_size
+
+    channels = payload.get("channels", [])
+    if isinstance(channels, list) and channels:
+        input_cfg["active_channel"] = str(channels[0])
+
+    align_mode = params.get("alignMode")
+    if align_mode not in ("", None):
+        reg_cfg["align_mode"] = str(align_mode)
+
+    return cfg
+
+
+def _runtime_path_issues(payload: dict) -> list[dict[str, str]]:
+    issues: list[dict[str, str]] = []
+    input_dir = str(payload.get("inputDir", "")).strip()
+    atlas = str((payload.get("params", {}) or {}).get("atlasPath") or payload.get("atlasPath") or "").strip()
+    struct = str((payload.get("params", {}) or {}).get("structPath") or payload.get("structPath") or "").strip()
+
+    if not input_dir or not Path(input_dir).exists():
+        issues.append(
+            {
+                "field": "inputDir",
+                "severity": "error",
+                "message": "Input TIFF folder is missing or not found.",
+            }
+        )
+    if not atlas or not Path(atlas).exists():
+        issues.append(
+            {
+                "field": "atlasPath",
+                "severity": "error",
+                "message": "Atlas annotation file is missing or not found.",
+            }
+        )
+    if not struct or not Path(struct).exists():
+        issues.append(
+            {
+                "field": "structPath",
+                "severity": "error",
+                "message": "Structure mapping file is missing or not found.",
+            }
+        )
+    elif Path(struct).suffix.lower() not in {".csv", ".json"}:
+        issues.append(
+            {
+                "field": "structPath",
+                "severity": "error",
+                "message": "Structure mapping file must be .csv or .json.",
+            }
+        )
+    return issues
+
+
+def _collect_preflight_issues(payload: dict) -> tuple[dict, list[dict[str, str]], Path]:
+    config_path = _resolve_config_path(payload.get("configPath"))
+    cfg = _apply_runtime_overrides(load_config(config_path), payload)
+    issues = collect_runtime_config_issues(cfg, require_input_dir=True)
+    issues.extend(_runtime_path_issues(payload))
+    return cfg, issues, config_path
+
+
+def _materialize_runtime_config(payload: dict) -> Path:
+    cfg, _issues, _config_path = _collect_preflight_issues(payload)
+    runtime_dir = ctx.OUTPUT_DIR / "runtime_configs"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    runtime_path = runtime_dir / f"run_config_{stamp}.json"
+    runtime_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    return runtime_path
 
 
 @bp.get("/")
@@ -40,21 +143,44 @@ def info():
 
 @bp.get("/api/validate")
 def validate():
-    input_dir = request.args.get("inputDir", "")
-    atlas = request.args.get("atlasPath", "")
-    struct = request.args.get("structPath", "")
+    payload = {
+        "inputDir": request.args.get("inputDir", ""),
+        "atlasPath": request.args.get("atlasPath", ""),
+        "structPath": request.args.get("structPath", ""),
+    }
+    field_issues = _runtime_path_issues(payload)
+    return jsonify(
+        {
+            "ok": not any(issue["severity"] == "error" for issue in field_issues),
+            "issues": [issue["message"] for issue in field_issues],
+            "fieldIssues": field_issues,
+        }
+    )
 
-    issues = []
-    if not input_dir or not Path(input_dir).exists():
-        issues.append("Input TIFF folder missing or not found")
-    if not atlas or not Path(atlas).exists():
-        issues.append("Atlas annotation file missing or not found")
-    if not struct or not Path(struct).exists():
-        issues.append("Structure mapping file missing or not found")
-    elif Path(struct).suffix.lower() not in {".csv", ".json"}:
-        issues.append("Structure mapping file must be .csv or .json")
 
-    return jsonify({"ok": len(issues) == 0, "issues": issues})
+@bp.post("/api/pipeline/preflight")
+def preflight():
+    payload = request.get_json(force=True) or {}
+    try:
+        _cfg, issues, _config_path = _collect_preflight_issues(payload)
+    except Exception as exc:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "issues": [
+                        {
+                            "field": "config",
+                            "severity": "error",
+                            "message": f"Failed to load config for preflight: {exc}",
+                        }
+                    ],
+                }
+            ),
+            400,
+        )
+    ok = not any(issue["severity"] == "error" for issue in issues)
+    return jsonify({"ok": ok, "issues": issues})
 
 
 @bp.post("/api/run")
@@ -64,9 +190,10 @@ def run_pipeline():
             return jsonify({"ok": False, "error": "pipeline already running"}), 409
 
     payload = request.get_json(force=True)
-    config = payload.get("configPath") or str(
-        ctx.PROJECT_ROOT / "configs" / "run_config.template.json"
-    )
+    try:
+        config = str(_materialize_runtime_config(payload))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"failed to build runtime config: {exc}"}), 400
     input_dir = payload.get("inputDir", "")
     channels = payload.get("channels", ["red"])
     if isinstance(channels, str):
@@ -84,28 +211,30 @@ def run_pipeline():
 
 @bp.get("/api/status")
 def status():
-    # Count how many slices have been registered (overlay files present)
-    reg_dir = ctx.OUTPUT_DIR / "registered_slices"
-    slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
-    # Count total input slices using whichever processing directory is active.
-    merged_dir = ctx.OUTPUT_DIR / "tmp_merged"
-    channel_dir = ctx.OUTPUT_DIR / "tmp_channel"
-    merged_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
-    channel_total = len(list(channel_dir.glob("*.tif"))) if channel_dir.exists() else 0
-    sampling_mode = ""
-    config_path = ctx.run_state.get("config_path")
-    if config_path:
-        try:
-            cfg = json.loads(Path(str(config_path)).read_text(encoding="utf-8-sig"))
-            sampling_mode = str(cfg.get("input", {}).get("sampling_mode", "")).lower().strip()
-        except Exception:
-            sampling_mode = ""
-    if sampling_mode in {"single", "native", "raw", "original"}:
-        slices_total = channel_total
-    elif sampling_mode in {"merge", "merged", "merge5", "merge_n"}:
-        slices_total = merged_total
-    else:
-        slices_total = merged_total if merged_total > 0 else channel_total
+    progress = dict(ctx.run_state.get("progress", {}) or {})
+    slices_done = int(progress.get("slicesDone", 0) or 0)
+    slices_total = int(progress.get("slicesTotal", 0) or 0)
+    if slices_done <= 0 and slices_total <= 0:
+        reg_dir = ctx.OUTPUT_DIR / "registered_slices"
+        slices_done = len(list(reg_dir.glob("slice_*_overlay.png"))) if reg_dir.exists() else 0
+        merged_dir = ctx.OUTPUT_DIR / "tmp_merged"
+        channel_dir = ctx.OUTPUT_DIR / "tmp_channel"
+        merged_total = len(list(merged_dir.glob("*.tif"))) if merged_dir.exists() else 0
+        channel_total = len(list(channel_dir.glob("*.tif"))) if channel_dir.exists() else 0
+        sampling_mode = ""
+        config_path = ctx.run_state.get("config_path")
+        if config_path:
+            try:
+                cfg = json.loads(Path(str(config_path)).read_text(encoding="utf-8-sig"))
+                sampling_mode = str(cfg.get("input", {}).get("sampling_mode", "")).lower().strip()
+            except Exception:
+                sampling_mode = ""
+        if sampling_mode in {"single", "native", "raw", "original"}:
+            slices_total = channel_total
+        elif sampling_mode in {"merge", "merged", "merge5", "merge_n"}:
+            slices_total = merged_total
+        else:
+            slices_total = merged_total if merged_total > 0 else channel_total
     return jsonify(
         {
             "running": ctx.run_state["running"],
@@ -117,6 +246,12 @@ def status():
             "slicesDone": slices_done,
             "slicesTotal": slices_total,
             "startEpoch": ctx.run_state.get("startEpoch"),
+            "progress": {
+                "phase": str(progress.get("phase", "idle")),
+                "stepCurrent": int(progress.get("stepCurrent", 0) or 0),
+                "stepTotal": int(progress.get("stepTotal", 0) or 0),
+                "message": str(progress.get("message", "")),
+            },
         }
     )
 
@@ -133,7 +268,9 @@ def cancel():
             ctx.run_state["current_channel"] = None
             ctx.run_state["channels"] = []
             ctx.run_state["startEpoch"] = None
+            ctx.run_state.setdefault("progress", {})["phase"] = "cancelled"
             ctx._append_log("[cancel] user requested stop")
+            ctx._append_error("Pipeline cancelled by user.", step="cancel", recoverable=True)
             return jsonify({"ok": True, "cancelled": True})
     return jsonify({"ok": False, "cancelled": False, "error": "no running process"}), 409
 
@@ -141,6 +278,12 @@ def cancel():
 @bp.get("/api/logs")
 def logs():
     return jsonify({"logs": ctx.run_state["logs"]})
+
+
+@bp.get("/api/error-log")
+def error_log():
+    errors = list(ctx.run_state.get("errors", []) or [])
+    return jsonify({"ok": True, "errors": errors, "count": len(errors)})
 
 
 @bp.get("/api/history")

@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.config_validation import validate_runtime_config, load_config
+from scripts.config_validation import collect_runtime_config_issues, validate_runtime_config, load_config
 from scripts.exceptions import (
     ConfigError,
     RegistrationError,
@@ -88,6 +88,18 @@ class TestValidateRuntimeConfig(unittest.TestCase):
         cfg["dedup"]["neighbor_slices"] = -1
         issues = validate_runtime_config(cfg)
         self.assertTrue(any("neighbor_slices" in i for i in issues))
+
+    def test_collect_runtime_config_issues_warns_on_zero_refine_range(self):
+        cfg = _minimal_valid_cfg()
+        cfg["registration"] = {"atlas_z_refine_range": 0}
+        issues = collect_runtime_config_issues(cfg)
+        self.assertTrue(
+            any(
+                issue["field"] == "registration.atlas_z_refine_range"
+                and issue["severity"] == "warning"
+                for issue in issues
+            )
+        )
 
 
 class TestExceptionHierarchy(unittest.TestCase):

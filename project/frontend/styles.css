@@ -80,6 +80,86 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+.error-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(217, 79, 79, 0.08);
+  overflow: hidden;
+}
+.error-panel-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  color: var(--text);
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.error-panel-toggle:hover { background: rgba(217, 79, 79, 0.08); }
+.error-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.error-panel-body {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 8px 10px 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.error-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.error-panel-empty {
+  font-size: 11px;
+  color: var(--text-hint);
+}
+.error-item {
+  border: 1px solid rgba(217, 79, 79, 0.24);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(0,0,0,0.16);
+}
+.error-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+.error-item-step {
+  color: #ffb4b4;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.error-item-time { color: var(--text-hint); }
+.error-item-message {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.error-item-source {
+  color: var(--text-hint);
+  font-size: 11px;
+  margin-top: 4px;
+}
 .lang-toggle {
   display: flex;
   align-items: center;
@@ -236,6 +316,16 @@ button { cursor: pointer; border: none; font-size: 13px; border-radius: var(--ra
 .actions-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
 .validate-status { font-size: 12px; color: var(--ok-light); margin-left: 4px; }
 .validate-status.err { color: var(--danger); }
+.field-error {
+  font-size: 11px;
+  color: #f48c8c;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+.field-input-error {
+  border-color: rgba(217, 79, 79, 0.8) !important;
+  box-shadow: 0 0 0 1px rgba(217, 79, 79, 0.15);
+}
 
 .workflow-mode-panel {
   border: 1px solid var(--border);
@@ -572,6 +662,58 @@ tr:hover td { background: var(--bg-card); }
 .modal-footer { margin-top: 20px; text-align: right; }
 .modal-close-btn { position: absolute; top: 14px; right: 14px; background: transparent; color: var(--text-muted); font-size: 18px; padding: 4px 8px; }
 .modal-close-btn:hover { color: var(--text); }
+.preflight-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.preflight-issue {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+}
+.preflight-issue.error { border-left-color: var(--danger); }
+.preflight-issue.warning { border-left-color: var(--warn); }
+.preflight-issue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.preflight-issue-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.preflight-issue.error .preflight-issue-badge {
+  background: rgba(217,79,79,0.16);
+  color: #ffb4b4;
+}
+.preflight-issue.warning .preflight-issue-badge {
+  background: rgba(212,146,42,0.16);
+  color: #f6d089;
+}
+.preflight-issue-field {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.preflight-issue-message {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
 
 /* ===== METHODS TEXT ===== */
 .methods-pre { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.7; white-space: pre-wrap; font-family: inherit; margin-top: 12px; max-height: 320px; overflow-y: auto; }
